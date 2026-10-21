@@ -76,7 +76,8 @@ A few things are deliberate. Please keep them that way, or open an issue to disc
 1. Fork the repo (or create a branch if you have access) from `main`.
 2. Make your change. Add or update tests in `Tests/TorieChanTests/` when you touch behavior,
    especially motion detection, filtering or anything that decides whether the alarm sounds.
-3. Run `make test` and `make app` before pushing.
+3. Run `make test` and `make app` before pushing. If you touched hardware-facing code (alarm, sensors,
+   lid, kiosk, alerts), run the relevant part of the manual checklist in [docs/TESTING.md](docs/TESTING.md).
 4. Open a pull request against `main` and fill in the template.
 
 ### Commit and pull request format
@@ -124,7 +125,8 @@ Individual commits on your branch can be anything; only the PR title lands on `m
 
 ## Releasing (maintainers)
 
-Pushing a version tag runs the release workflow. It tests, builds, signs with Developer ID,
+Run the manual hardware checklist in [docs/TESTING.md](docs/TESTING.md) first. Pushing a version tag
+then runs the release workflow. It tests, builds, signs with Developer ID,
 notarizes, packages the disk image and publishes a GitHub Release.
 
 ```sh

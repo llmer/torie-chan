@@ -1,41 +1,90 @@
-# Torie-chan
+<p align="center">
+  <img src="docs/images/icon.png" width="128" alt="Torie-chan app icon: two big kawaii eyes on an indigo rounded square">
+</p>
 
-A googly-eyed laptop sitter for macOS. Tell your AI agent "watch my laptop, back in 5".
-Your Mac goes full screen with big googly eyes that follow people walking by. If anyone
-moves the laptop, closes the lid, unplugs the charger or messes with it, it warns them out loud,
-then sounds a siren and texts your iPhone over iMessage. Only you can disarm it, with your code or Touch ID.
+<h1 align="center">Torie-chan</h1>
 
-## Download
+<p align="center">
+  A kawaii laptop guard for macOS.<br>
+  Tell your AI agent "watch my laptop, back in 5" and Torie-chan keeps an eye on it.
+</p>
 
-Grab `Torie-chan-<version>.dmg` from the GitHub Releases page, open it, and drag Torie-chan into Applications.
-Requires an Apple Silicon Mac on macOS 14 or later.
+<p align="center">
+  <a href="https://github.com/llmer/torie-chan/releases/latest">Download</a> ·
+  <a href="#getting-started">Getting started</a> ·
+  <a href="#how-it-works">How it works</a> ·
+  <a href="SECURITY.md">Security</a> ·
+  <a href="CONTRIBUTING.md">Contributing</a>
+</p>
 
-If the release notes say **unsigned build**, macOS blocks it the first time: open it once, then go to
-System Settings > Privacy & Security and click **Open Anyway**. Lid-close protection only works in signed builds.
+Stepping away from your laptop at a coffee shop? Arm Torie-chan (or ask Claude Code or Codex to). Your
+screen fills with a pair of big eyes that follow people walking by. If anyone moves the laptop, closes the
+lid, unplugs the charger or messes with it, she warns them out loud, then sounds a siren and texts your
+iPhone over iMessage. Only you can disarm her, with your code or Touch ID.
 
-## Build & install from source
+<p align="center">
+  <img src="docs/images/expressions.png" width="640" alt="Torie-chan's expressions: watching, someone close, side-eye at a lingerer, suspicious with an anger mark, alarm, welcome back and a flinch">
+</p>
 
-```sh
-make install        # builds, signs with your Apple Development identity, copies to /Applications, launches
-```
+## What it is, and what it isn't
 
-First launch opens Settings:
+Torie-chan is a **deterrent and an early warning**, not a lock. It makes walking off with your laptop loud,
+awkward and photographed, and it tells you right away. It can't stop someone who's determined: holding the
+power button always turns a Mac off (Torie-chan sounds the alarm the moment it's pressed, but she can't keep
+the Mac running). Keep Find My turned on too.
 
-1. **Confirm** you'll only use it where filming is allowed.
-2. **Set a disarm code** (6–12 digits).
-3. **Lid-close protection → Install**, then approve "Torie-chan" in System Settings › General › Login Items.
-4. **Camera → Allow.** The guard never asks mid-arm, so a permission prompt can't hide under the kiosk.
-5. Optional: **Phone Alerts**. Turn on iMessage alerts, enter your iPhone number or Apple ID email, and send a test.
-   Messages on the Mac must be signed in to iMessage; macOS asks once to let Torie-chan control Messages.
-   If a message to yourself arrives silently, use another number or email you own.
-6. **Connect your agent** by copying the command for Claude Code or Codex:
+The camera notices people walking by, on your Mac, and records nothing. A single photo is saved only if the
+alarm goes off. Rules about cameras vary from place to place: use it where filming is allowed, and never in
+restrooms or changing areas.
+
+## Requirements
+
+- An Apple Silicon Mac (the motion sensor is Apple Silicon only) on macOS 14 or later
+- Optional: Messages signed in to iMessage, for phone alerts
+- Optional: Claude Code or Codex, to arm it by asking
+
+## Getting started
+
+1. **Download** the latest `Torie-chan-<version>.dmg` from
+   [Releases](https://github.com/llmer/torie-chan/releases/latest), open it, and drag Torie-chan into
+   Applications. Open it from there. Releases are signed and notarized, so it opens like any other app.
+2. Torie-chan lives in the menu bar (the eyes icon). Her Settings window opens with a short setup checklist:
+
+<p align="center">
+  <img src="docs/images/settings.png" width="760" alt="Torie-chan Settings: a sidebar with Overview, Security, Sensors, Phone Alerts, AI Agents, Privacy and Data, and a setup checklist">
+</p>
+
+   - **Confirm** you'll only use it where filming is allowed.
+   - **Set a disarm code** (6-12 digits). Touch ID works too.
+   - **Lid-close protection**: click Install, then turn on Torie-chan in System Settings > General > Login Items.
+     Without it, closing the lid sounds the alarm but then the Mac goes to sleep.
+   - **Camera**: click Allow. Torie-chan never asks mid-arm, so a permission prompt can't hide behind her screen.
+   - Optional, **Phone Alerts**: turn on iMessage alerts, enter your iPhone number or Apple ID email, and
+     send a test. If a message to yourself arrives without a notification, use another number or email you own.
+3. Try **Sensors > Test motion**: tap the table, type, nudge the laptop, and watch what would set it off.
+4. **Arm it** from the sidebar or the menu bar, or connect your AI agent (Settings > AI Agents has the command):
 
 ```sh
 claude mcp add torie-chan -- "/Applications/Torie-chan.app/Contents/MacOS/bg-mcp"
 codex  mcp add torie-chan -- "/Applications/Torie-chan.app/Contents/MacOS/bg-mcp"
 ```
 
-Settings › **Test Motion** shows a live meter of what would set it off, without arming.
+   Then just say *"watch my laptop, back in 5."* Agents can arm Torie-chan and read what happened, but
+   they can never disarm her.
+
+When you close the lid, Torie-chan ducks under it like she's peeking out from under a bed:
+
+<p align="center">
+  <img src="docs/images/lid.png" width="760" alt="Filmstrip: as the lid closes a dark edge comes down and the eyes duck under it, then peek back out and pop up with sparkles as it opens">
+</p>
+
+### Building from source
+
+```sh
+make install        # builds, signs with your Apple Development identity, copies to /Applications, launches
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full developer setup.
 
 ## How it works
 
