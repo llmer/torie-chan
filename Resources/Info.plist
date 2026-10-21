@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleIdentifier</key>
+	<string>com.mostperfectsip.toriechan</string>
+	<key>CFBundleName</key>
+	<string>Torie-chan</string>
+	<key>CFBundleDisplayName</key>
+	<string>Torie-chan</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundleExecutable</key>
+	<string>TorieChan</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.utilities</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>Torie-chan, a googly-eyed laptop guard.</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Torie-chan watches who walks past your laptop while it's armed. Video is processed on-device and never stored, except a single photo if the alarm goes off.</string>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Torie-chan sends you an iMessage through Messages when someone touches your laptop.</string>
+</dict>
+</plist>
