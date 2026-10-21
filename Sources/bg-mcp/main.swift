@@ -120,6 +120,8 @@ func appBundleURL() -> URL? {
 }
 
 func launchApp() throws {
+    // Tests run this binary against a fake app; never launch (or arm) the real one.
+    if ProcessInfo.processInfo.environment["TORIECHAN_NO_LAUNCH"] != nil { return }
     // Not `open -g`: the guard screen must become the active app, or keystrokes
     // (including the disarm code) would land in the agent's terminal behind it.
     let p = Process()

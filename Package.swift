@@ -14,7 +14,7 @@ let package = Package(
         .executableTarget(name: "TorieChan", dependencies: ["GuardShared"]),
         .executableTarget(name: "bg-mcp", dependencies: ["GuardShared"]),
         .executableTarget(name: "bg-helper", dependencies: ["GuardShared"]),
-        .testTarget(name: "TorieChanTests", dependencies: ["TorieChan", "GuardShared"]),
+        .testTarget(name: "TorieChanTests", dependencies: ["TorieChan", "GuardShared", "bg-mcp"]),
     ],
     swiftLanguageModes: [.v5]
 )

@@ -61,17 +61,17 @@ func executablePath(of pid: pid_t) -> String? {
     return String(cString: buf)
 }
 
-/// All state lives on the main queue.
+/// Owns the lease (HelperLease, in GuardShared) and the root-only side effects. Main queue only.
 final class Guardian {
-    private var armed = false
-    private var lastHeartbeat = Date()
     private var ownerUID: uid_t = 0
     private var appBundlePath: String?
-    private var awaitingRelaunchSince: Date?
-    private var connections = Set<ObjectIdentifier>()
+    private lazy var lease = HelperLease(actions: .init(
+        setSleepDisabled: { setDisableSleep($0) },
+        relaunchApp: { [weak self] in self?.relaunchApp() },
+        log: log))
 
     init() {
-        let t = Timer(timeInterval: 5, repeats: true) { [weak self] _ in self?.checkLease() }
+        let t = Timer(timeInterval: 5, repeats: true) { [weak self] _ in self?.lease.check() }
         RunLoop.main.add(t, forMode: .common)
     }
 
@@ -81,64 +81,19 @@ final class Guardian {
             // .../Torie-chan.app/Contents/MacOS/TorieChan
             appBundlePath = URL(fileURLWithPath: exe).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().path
         }
-        armed = true
-        awaitingRelaunchSince = nil
-        lastHeartbeat = Date()
-        return setDisableSleep(true)
+        return lease.arm()
     }
 
-    func heartbeat() {
-        lastHeartbeat = Date()
-        awaitingRelaunchSince = nil
-    }
-
-    func disarm() -> (Bool, String?) {
-        armed = false
-        awaitingRelaunchSince = nil
-        return setDisableSleep(false)
-    }
-
-    func connected(_ conn: NSXPCConnection) {
-        connections.insert(ObjectIdentifier(conn))
-    }
-
-    func disconnected(_ conn: NSXPCConnection) {
-        connections.remove(ObjectIdentifier(conn))
-        guard armed, connections.isEmpty else {
-            if !armed { setDisableSleep(false) }
-            return
-        }
-        // The app vanished without disarming: it was killed or crashed. Bring it back; it will
-        // find its armed marker and go straight to the alarm.
-        log("app disconnected while armed; relaunching")
-        awaitingRelaunchSince = Date()
-        relaunchApp()
-    }
+    func heartbeat() { lease.heartbeat() }
+    func disarm() -> (Bool, String?) { lease.disarm() }
+    func connected(_ conn: NSXPCConnection) { lease.connected() }
+    func disconnected(_ conn: NSXPCConnection) { lease.disconnected() }
 
     private func relaunchApp() {
         guard ownerUID != 0 else { return }
         var args = ["asuser", String(ownerUID), "/usr/bin/open"]
         if let appBundlePath { args.append(appBundlePath) } else { args += ["-b", GuardIDs.appBundleID] }
         if let err = run("/bin/launchctl", args) { log("relaunch failed: \(err)") }
-    }
-
-    private func checkLease() {
-        guard armed else { return }
-        let now = Date()
-        if let since = awaitingRelaunchSince {
-            if now.timeIntervalSince(since) > HelperInfo.relaunchGraceSeconds {
-                log("app never came back; restoring sleep")
-                armed = false
-                awaitingRelaunchSince = nil
-                setDisableSleep(false)
-            } else {
-                relaunchApp()
-            }
-        } else if now.timeIntervalSince(lastHeartbeat) > HelperInfo.leaseSeconds {
-            log("no heartbeat for \(Int(HelperInfo.leaseSeconds))s (app hung?); restoring sleep")
-            armed = false
-            setDisableSleep(false)
-        }
     }
 }
 

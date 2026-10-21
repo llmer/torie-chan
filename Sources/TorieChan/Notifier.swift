@@ -21,9 +21,23 @@ final class Notifier {
         }
     }
 
-    private let defaults = UserDefaults.standard
-    private let queue = DispatchQueue(label: "toriechan.imessage")
+    /// Sends the osascript arguments [recipient, text, photo path?]; returns an error or nil.
+    typealias Transport = ([String]) -> String?
+
+    private let defaults: UserDefaults
+    private let transport: Transport
+    private let now: () -> Date
+    /// Tests run the transport inline; the app never blocks the alarm on Messages.
+    private let queue: DispatchQueue?
     private var lastSent: [Priority: Date] = [:]
+
+    init(defaults: UserDefaults = .standard, transport: @escaping Transport = Notifier.run,
+         now: @escaping () -> Date = Date.init, runsInline: Bool = false) {
+        self.defaults = defaults
+        self.transport = transport
+        self.now = now
+        queue = runsInline ? nil : DispatchQueue(label: "toriechan.imessage")
+    }
 
     var isEnabled: Bool {
         get { defaults.bool(forKey: "imessageEnabled") }
@@ -54,7 +68,7 @@ final class Notifier {
     func send(_ title: String, _ body: String, priority: Priority = .normal, attachment: URL? = nil, force: Bool = false,
               completion: ((String?) -> Void)? = nil) {
         guard force || isConfigured else { return }
-        let now = Date()
+        let now = self.now()
         if !force, let last = lastSent[priority], now.timeIntervalSince(last) < priority.cooldown { return }
         lastSent[priority] = now
 
@@ -63,8 +77,15 @@ final class Notifier {
         var args = [handle, text]
         if let attachment, includePhoto || force { args.append(attachment.path) }
 
+        guard let queue else {
+            // Not `completion?(transport(args))`: optional chaining would skip the send when there's no completion.
+            let error = transport(args)
+            completion?(error)
+            return
+        }
+        let transport = self.transport
         queue.async {
-            let error = Self.run(args)
+            let error = transport(args)
             DispatchQueue.main.async { completion?(error) }
         }
     }
@@ -88,7 +109,7 @@ final class Notifier {
     ]
 
     /// Returns a human-readable error, or nil on success.
-    private static func run(_ args: [String]) -> String? {
+    static func run(_ args: [String]) -> String? {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
         p.arguments = script.flatMap { ["-e", $0] } + args

@@ -8,9 +8,10 @@ final class EventLog {
 
     private(set) var events: [GuardEvent] = []
     private let maxInMemory = 1000
-    private let url = GuardIDs.eventLogURL
+    private let url: URL
 
-    init() {
+    init(url: URL = GuardIDs.eventLogURL) {
+        self.url = url
         loadAndPrune()
     }
 
