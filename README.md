@@ -162,3 +162,12 @@ Camera and keychain access need the signed `.app`; `swift run` won't have permis
 - **Data-protection keychain:** needs a provisioning profile.
 - **Full sensor fusion:** a Mahony filter, double-integrated lift height and band-split filtering. The agitation
   score, adaptive noise floor and camera scene check cover most of this today.
+
+## Contributing
+
+Pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, the project layout, and the
+Conventional Commits format for PR titles.
+
+## License
+
+[MIT](LICENSE)

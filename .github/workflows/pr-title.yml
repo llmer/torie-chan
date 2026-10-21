@@ -1,0 +1,28 @@
+name: PR title
+
+# Pull requests are squash-merged, so the title becomes the commit message on main.
+# It must follow Conventional Commits: <type>(<optional scope>): <summary>
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions: {}
+
+jobs:
+  conventional-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the title
+        env:
+          TITLE: ${{ github.event.pull_request.title }} # via env, never interpolated into the script
+        run: |
+          pattern='^(feat|fix|perf|refactor|docs|test|build|ci|chore|style|revert)(\([a-z0-9-]+\))?!?: [^ ].{0,71}$'
+          if [[ "$TITLE" =~ $pattern ]]; then
+            echo "OK: $TITLE"
+          else
+            echo "::error::PR title must look like 'type(scope): summary' (Conventional Commits, 72 characters max for the summary)."
+            echo "Got: $TITLE"
+            echo "Types: feat fix perf refactor docs test build ci chore style revert. See CONTRIBUTING.md."
+            exit 1
+          fi
