@@ -53,6 +53,7 @@ final class GuardController: ObservableObject {
     nonisolated static let defaultCountdown = 10
     /// Agents can't arm with less than this, so the owner always has a moment to see it happen.
     nonisolated static let minAgentCountdown = 5
+    nonisolated static let maxAgentCountdown = 120
     /// How long a warning lasts before we decide it was nothing (or escalate).
     nonisolated static let graceSeconds: TimeInterval = 5
     /// Lid closed or screen being lowered: a much shorter fuse.
@@ -932,7 +933,8 @@ final class GuardController: ObservableObject {
     func handle(_ request: ControlRequest) -> ControlResponse {
         switch request.command {
         case .arm:
-            let countdown = max(Self.minAgentCountdown, request.countdownSeconds ?? Self.defaultCountdown)
+            // Clamped here too: the socket is reachable without going through bg-mcp.
+            let countdown = min(Self.maxAgentCountdown, max(Self.minAgentCountdown, request.countdownSeconds ?? Self.defaultCountdown))
             if let error = arm(countdown: countdown, note: request.note, expectedBackMinutes: request.expectedBackMinutes) {
                 return ControlResponse(ok: false, error: error, status: status())
             }

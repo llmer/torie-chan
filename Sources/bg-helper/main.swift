@@ -63,63 +63,79 @@ func executablePath(of pid: pid_t) -> String? {
 
 /// Owns the lease (HelperLease, in GuardShared) and the root-only side effects. Main queue only.
 final class Guardian {
-    private var ownerUID: uid_t = 0
+    private let requirement: String
     private var appBundlePath: String?
     private lazy var lease = HelperLease(actions: .init(
         setSleepDisabled: { setDisableSleep($0) },
         relaunchApp: { [weak self] in self?.relaunchApp() },
         log: log))
 
-    init() {
+    init(requirement: String) {
+        self.requirement = requirement
         let t = Timer(timeInterval: 5, repeats: true) { [weak self] _ in self?.lease.check() }
         RunLoop.main.add(t, forMode: .common)
     }
 
-    func arm(from conn: NSXPCConnection) -> (Bool, String?) {
-        ownerUID = conn.effectiveUserIdentifier
-        if let exe = executablePath(of: conn.processIdentifier) {
-            // .../Torie-chan.app/Contents/MacOS/TorieChan
-            appBundlePath = URL(fileURLWithPath: exe).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().path
-        }
-        return lease.arm()
+    func arm(from service: HelperService) -> (Bool, String?) {
+        let result = lease.arm(client: service.client, uid: service.uid)
+        if result.0, let bundle = service.bundlePath { appBundlePath = bundle }
+        return result
     }
 
-    func heartbeat() { lease.heartbeat() }
-    func disarm() -> (Bool, String?) { lease.disarm() }
-    func connected(_ conn: NSXPCConnection) { lease.connected() }
-    func disconnected(_ conn: NSXPCConnection) { lease.disconnected() }
+    func heartbeat(from service: HelperService) { lease.heartbeat(client: service.client, uid: service.uid) }
+    func disarm(from service: HelperService) -> (Bool, String?) { lease.disarm(client: service.client, uid: service.uid) }
+    func disconnected(_ client: HelperLease.Client) { lease.disconnected(client: client) }
 
     private func relaunchApp() {
-        guard ownerUID != 0 else { return }
-        var args = ["asuser", String(ownerUID), "/usr/bin/open"]
-        if let appBundlePath { args.append(appBundlePath) } else { args += ["-b", GuardIDs.appBundleID] }
+        guard let uid = lease.ownerUID, uid != 0 else { return }
+        var target = ["-b", GuardIDs.appBundleID]
+        if let appBundlePath {
+            guard AppSignature.isValid(at: appBundlePath, requirement: requirement) else {
+                log("not relaunching \(appBundlePath): it isn't a validly signed Torie-chan")
+                return
+            }
+            target = [appBundlePath]
+        }
+        // `launchctl asuser` only switches the session, not the credentials, so drop to the user with sudo:
+        // the app must never be started as root.
+        let args = ["asuser", String(uid), "/usr/bin/sudo", "-n", "-u", "#\(uid)", "/usr/bin/open"] + target
         if let err = run("/bin/launchctl", args) { log("relaunch failed: \(err)") }
     }
 }
 
 final class HelperService: NSObject, GuardHelperProtocol {
     let guardian: Guardian
-    weak var connection: NSXPCConnection?
+    let client: HelperLease.Client
+    let uid: UInt32
+    /// The connecting app's bundle, from its pid when the connection was accepted.
+    let bundlePath: String?
 
-    init(guardian: Guardian) {
+    init(guardian: Guardian, client: HelperLease.Client, connection: NSXPCConnection) {
         self.guardian = guardian
+        self.client = client
+        uid = connection.effectiveUserIdentifier
+        // .../Torie-chan.app/Contents/MacOS/TorieChan
+        bundlePath = executablePath(of: connection.processIdentifier).map {
+            URL(fileURLWithPath: $0).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().path
+        }
     }
 
+    // Messages only arrive once the caller has passed the code-signing requirement, so the lease
+    // counts a connection from its first message, never from merely connecting.
     func arm(reply: @escaping (Bool, String?) -> Void) {
         DispatchQueue.main.async {
-            guard let conn = self.connection else { return reply(false, "no connection") }
-            let (ok, err) = self.guardian.arm(from: conn)
+            let (ok, err) = self.guardian.arm(from: self)
             reply(ok, err)
         }
     }
 
     func heartbeat() {
-        DispatchQueue.main.async { self.guardian.heartbeat() }
+        DispatchQueue.main.async { self.guardian.heartbeat(from: self) }
     }
 
     func disarm(reply: @escaping (Bool, String?) -> Void) {
         DispatchQueue.main.async {
-            let (ok, err) = self.guardian.disarm()
+            let (ok, err) = self.guardian.disarm(from: self)
             reply(ok, err)
         }
     }
@@ -131,26 +147,27 @@ final class HelperService: NSObject, GuardHelperProtocol {
 
 final class ListenerDelegate: NSObject, NSXPCListenerDelegate {
     let requirement: String?
-    let guardian = Guardian()
+    let guardian: Guardian?
+    private var nextClient: HelperLease.Client = 0
 
     init(requirement: String?) {
         self.requirement = requirement
+        guardian = requirement.map { Guardian(requirement: $0) }
     }
 
     func listener(_ listener: NSXPCListener, shouldAcceptNewConnection conn: NSXPCConnection) -> Bool {
-        guard let requirement else {
+        guard let requirement, let guardian else {
             log("refusing connection: helper is not team-signed, cannot verify caller")
             return false
         }
         conn.setCodeSigningRequirement(requirement)
-        let service = HelperService(guardian: guardian)
-        service.connection = conn
+        nextClient += 1
+        let client = nextClient
         conn.exportedInterface = NSXPCInterface(with: GuardHelperProtocol.self)
-        conn.exportedObject = service
-        conn.invalidationHandler = { [weak self, unowned conn] in
-            DispatchQueue.main.async { self?.guardian.disconnected(conn) }
+        conn.exportedObject = HelperService(guardian: guardian, client: client, connection: conn)
+        conn.invalidationHandler = {
+            DispatchQueue.main.async { guardian.disconnected(client) }
         }
-        DispatchQueue.main.async { self.guardian.connected(conn) }
         conn.resume()
         return true
     }

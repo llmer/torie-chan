@@ -101,19 +101,20 @@ final class HelperLeaseTests: XCTestCase {
                     now: { [clock] in clock.date })
     }
 
+    private let app: HelperLease.Client = 1
+    private let owner: UInt32 = 501
+
     func testDisarmRestoresSleep() {
         let lease = makeLease()
-        lease.connected()
-        lease.arm()
+        lease.arm(client: app, uid: owner)
         XCTAssertTrue(sleepDisabled)
-        lease.disarm()
+        lease.disarm(client: app, uid: owner)
         XCTAssertFalse(sleepDisabled)
     }
 
     func testAHungAppLosesTheLease() {
         let lease = makeLease()
-        lease.connected()
-        lease.arm()
+        lease.arm(client: app, uid: owner)
         clock.advance(HelperInfo.leaseSeconds - 1)
         lease.check()
         XCTAssertTrue(sleepDisabled, "still within the lease")
@@ -124,11 +125,10 @@ final class HelperLeaseTests: XCTestCase {
 
     func testHeartbeatsKeepTheLeaseAlive() {
         let lease = makeLease()
-        lease.connected()
-        lease.arm()
+        lease.arm(client: app, uid: owner)
         for _ in 0..<20 {
             clock.advance(HelperInfo.heartbeatSeconds)
-            lease.heartbeat()
+            lease.heartbeat(client: app, uid: owner)
             lease.check()
         }
         XCTAssertTrue(sleepDisabled)
@@ -136,26 +136,24 @@ final class HelperLeaseTests: XCTestCase {
 
     func testAKilledAppIsRelaunchedAndTheMacStaysAwake() {
         let lease = makeLease()
-        lease.connected()
-        lease.arm()
-        lease.disconnected()
+        lease.arm(client: app, uid: owner)
+        lease.disconnected(client: app)
         XCTAssertTrue(sleepDisabled)
         XCTAssertEqual(relaunches, 1)
         XCTAssertTrue(lease.isAwaitingRelaunch)
+        XCTAssertEqual(lease.ownerUID, owner, "relaunched as the user who armed")
 
-        // The app comes back, reconnects and re-arms.
+        // The app comes back on a new connection and re-arms.
         clock.advance(5)
-        lease.connected()
-        lease.arm()
+        lease.arm(client: 2, uid: owner)
         XCTAssertFalse(lease.isAwaitingRelaunch)
         XCTAssertTrue(sleepDisabled)
     }
 
     func testIfTheAppNeverComesBackSleepIsRestored() {
         let lease = makeLease()
-        lease.connected()
-        lease.arm()
-        lease.disconnected()
+        lease.arm(client: app, uid: owner)
+        lease.disconnected(client: app)
         clock.advance(HelperInfo.relaunchGraceSeconds - 1)
         lease.check()
         XCTAssertTrue(sleepDisabled)
@@ -166,13 +164,60 @@ final class HelperLeaseTests: XCTestCase {
         XCTAssertFalse(lease.isArmed)
     }
 
-    func testDisconnectingWhileDisarmedRestoresSleep() {
+    func testDisconnectingAfterDisarmRestoresSleep() {
         let lease = makeLease()
-        lease.connected()
+        lease.arm(client: app, uid: owner)
+        lease.disarm(client: app, uid: owner)
         sleepDisabled = true // stale state from a previous run
-        lease.disconnected()
+        lease.disconnected(client: app)
         XCTAssertFalse(sleepDisabled)
         XCTAssertEqual(relaunches, 0)
+    }
+
+    func testConnectionsThatNeverSpokeDontHoldTheLease() {
+        let lease = makeLease()
+        lease.arm(client: app, uid: owner)
+        // Any process can open the Mach service, but it doesn't count until it passes the signing check.
+        lease.disconnected(client: 99)
+        lease.disconnected(client: app)
+        XCTAssertEqual(relaunches, 1, "a lingering stranger connection doesn't stop the relaunch")
+    }
+
+    func testAnotherUserCantTakeOverOrClearTheGuard() {
+        let lease = makeLease()
+        lease.arm(client: app, uid: owner)
+        XCTAssertFalse(lease.disarm(client: 7, uid: 502).0)
+        XCTAssertTrue(sleepDisabled)
+        XCTAssertFalse(lease.arm(client: 7, uid: 502).0)
+        XCTAssertEqual(lease.ownerUID, owner)
+
+        // Their heartbeats and connections don't keep the owner's lease alive either.
+        lease.heartbeat(client: 7, uid: 502)
+        lease.disconnected(client: app)
+        XCTAssertEqual(relaunches, 1)
+    }
+}
+
+// MARK: - Relaunch signature check
+
+final class AppSignatureTests: XCTestCase {
+    private let requirement = #"identifier "com.mostperfectsip.toriechan" and anchor apple generic"#
+
+    func testAnUnsignedBundleIsRefused() throws {
+        let fake = temporaryDirectory().appendingPathComponent("Torie-chan.app/Contents/MacOS", isDirectory: true)
+        try FileManager.default.createDirectory(at: fake, withIntermediateDirectories: true)
+        try Data("#!/bin/sh\n".utf8).write(to: fake.appendingPathComponent("TorieChan"))
+        XCTAssertFalse(AppSignature.isValid(at: fake.deletingLastPathComponent().deletingLastPathComponent().path, requirement: requirement))
+    }
+
+    func testSomeoneElsesSignedAppIsRefused() {
+        XCTAssertTrue(AppSignature.isValid(at: "/System/Applications/Calculator.app", requirement: "anchor apple"),
+                      "sanity check: the API accepts a valid app against a requirement it meets")
+        XCTAssertFalse(AppSignature.isValid(at: "/System/Applications/Calculator.app", requirement: requirement))
+    }
+
+    func testAMissingPathIsRefused() {
+        XCTAssertFalse(AppSignature.isValid(at: "/nonexistent/Torie-chan.app", requirement: requirement))
     }
 }
 
@@ -263,6 +308,32 @@ final class NotifierTests: XCTestCase {
         XCTAssertEqual(outbox.messages[0][0], "me@icloud.com", "trimmed recipient")
         XCTAssertTrue(outbox.messages[0][1].hasPrefix("Torie-chan: ALARM\nLifted. \"quotes\" and \\ backslashes"),
                       "text is passed verbatim as an argument, never spliced into the script")
+    }
+
+    func testHandlesThatCouldBeReadAsScriptAreRejected() {
+        for bad in ["-eproperty p : (do shell script \"id\")--@x.c", "-e@x.com", "a\"b@x.com", "me@x.com; rm",
+                    "me@@x.com", "@x.com", "me@.com", "+1 555 0100 & x", "12345"] {
+            XCTAssertFalse(Notifier.looksLikeHandle(bad), bad)
+        }
+        for good in ["me@icloud.com", "first.last+tag@example.co.uk", "+1 (555) 123-4567", "5551234567"] {
+            XCTAssertTrue(Notifier.looksLikeHandle(good), good)
+        }
+    }
+
+    func testABadHandleIsNeverSentEvenWhenForced() {
+        let n = make()
+        n.handle = "-eproperty p : (do shell script \"id\")--@x.c"
+        var error: String?
+        n.send("Test", "Hi", priority: .urgent, force: true) { error = $0 }
+        XCTAssertTrue(outbox.messages.isEmpty)
+        XCTAssertNotNil(error)
+    }
+
+    func testArgumentsCantBeReadAsOsascriptOptions() throws {
+        let line = Notifier.osascriptArguments(["-eevil", "text"])
+        let separator = try XCTUnwrap(line.firstIndex(of: "--"))
+        XCTAssertEqual(Array(line[(separator + 1)...]), ["-eevil", "text"])
+        XCTAssertFalse(line[..<separator].contains("-eevil"))
     }
 
     func testNothingIsSentWhenTurnedOff() {

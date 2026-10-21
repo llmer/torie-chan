@@ -49,10 +49,12 @@ public enum ControlClient {
         return try ControlCoding.decoder.decode(ControlResponse.self, from: line)
     }
 
-    public static func readLine(fd: Int32) throws -> Data {
+    /// Reads up to a newline. With a `deadline`, gives up once it passes (the socket's receive timeout bounds each read).
+    public static func readLine(fd: Int32, deadline: Date? = nil) throws -> Data {
         var data = Data()
         var byte: UInt8 = 0
         while true {
+            if let deadline, Date() > deadline { throw ControlClientError.io("timed out") }
             let n = read(fd, &byte, 1)
             if n <= 0 { break }
             if byte == 0x0A { break }

@@ -13,6 +13,9 @@ final class ControlServer {
     }
 
     func start() throws {
+        guard path.utf8.count < MemoryLayout.size(ofValue: sockaddr_un().sun_path) else {
+            throw ControlClientError.io("socket path is too long: \(path)")
+        }
         unlink(path)
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
         guard fd >= 0 else { throw ControlClientError.io("socket() failed") }
@@ -56,11 +59,13 @@ final class ControlServer {
 
     private func serve(_ client: Int32) {
         defer { close(client) }
-        var timeout = timeval(tv_sec: 5, tv_usec: 0)
+        // Requests are served one at a time, so a client that trickles bytes gets 5 seconds in total, not per byte.
+        var timeout = timeval(tv_sec: 1, tv_usec: 0)
         setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
+        setsockopt(client, SOL_SOCKET, SO_SNDTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
 
         let response: ControlResponse
-        if let line = try? ControlClient.readLine(fd: client),
+        if let line = try? ControlClient.readLine(fd: client, deadline: Date().addingTimeInterval(5)),
            let request = try? ControlCoding.decoder.decode(ControlRequest.self, from: line) {
             response = DispatchQueue.main.sync { handler(request) }
         } else {
