@@ -2,6 +2,7 @@
 //   swiftc -O -swift-version 5 Sources/TorieChan/UI/EyesView.swift Sources/TorieChan/UI/EyesModel.swift \
 //     Sources/TorieChan/Sensors/PersonTracker.swift scripts/icon/main.swift -o build/make-icon
 //   build/make-icon <out.png> [close|calm|happy]   (or just: make icon)
+//   build/make-icon <out.png> dmg|dmg@2x            disk image window background
 import AppKit
 import SwiftUI
 
@@ -33,10 +34,51 @@ struct IconView: View {
     }
 }
 
+/// Background for the disk image window (660 x 400 pt): app on the left at (170, 190), the
+/// Applications shortcut on the right at (490, 190), an arrow between them.
+@MainActor
+struct DMGBackground: View {
+    let eyes: EyesModel.Frame
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            LinearGradient(colors: [Color(red: 0.16, green: 0.13, blue: 0.32), Color(red: 0.06, green: 0.05, blue: 0.13)],
+                           startPoint: .top, endPoint: .bottom)
+            StaticEyesView(frame: eyes)
+                .frame(width: 160, height: 90)
+                .position(x: 330, y: 62)
+            Text("Drag Torie-chan into Applications")
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white.opacity(0.75))
+                .frame(width: 660)
+                .position(x: 330, y: 318)
+            Canvas { gc, _ in
+                var arrow = Path()
+                arrow.move(to: CGPoint(x: 262, y: 190))
+                arrow.addLine(to: CGPoint(x: 392, y: 190))
+                arrow.move(to: CGPoint(x: 376, y: 176))
+                arrow.addLine(to: CGPoint(x: 394, y: 190))
+                arrow.addLine(to: CGPoint(x: 376, y: 204))
+                gc.stroke(arrow, with: .color(.white.opacity(0.35)),
+                          style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
+            }
+        }
+        .frame(width: 660, height: 400)
+    }
+}
+
 @MainActor func render() {
     let args = CommandLine.arguments
     let out = URL(fileURLWithPath: args[1])
     let variant = args.count > 2 ? args[2] : "close"
+    if variant.hasPrefix("dmg") {
+        let renderer = ImageRenderer(content: DMGBackground(eyes: EyesModel.preview(mood: .calm, lookAt: CGPoint(x: -0.6, y: 0.3)).currentFrame()))
+        renderer.scale = variant == "dmg@2x" ? 2 : 1
+        guard let cg = renderer.cgImage,
+              let png = NSBitmapImageRep(cgImage: cg).representation(using: .png, properties: [:]) else { exit(1) }
+        try! png.write(to: out)
+        return
+    }
     let model: EyesModel = switch variant {
     case "close": EyesModel.preview(mood: .calm, lookAt: CGPoint(x: 0, y: -0.1), close: true)
     case "happy": EyesModel.preview(mood: .happy)
