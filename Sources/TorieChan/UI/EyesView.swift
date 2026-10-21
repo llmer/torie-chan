@@ -41,18 +41,22 @@ enum EyesRenderer {
         // The closing lid is the underside of a bed coming down from the top. The eyes stay put
         // until its edge reaches them, then duck under it: the edge always covers the top of the
         // eyes a bit more the further it comes down, so they peer up and out from the gap.
-        let edgeY = underEdge(f.hide, size)
+        // Model values are Double; convert once so no expression below mixes Double and CGFloat
+        // (older Swift compilers can't pick a sin/cos overload when they're mixed).
+        let hide = CGFloat(f.hide)
+        let offset = CGPoint(x: CGFloat(f.offset.x), y: CGFloat(f.offset.y))
+        let edgeY = underEdge(hide, size)
         let eyeH = H * 0.92
-        let covered = 0.1 + 0.2 * f.hide // never hide the pupils: they're doing the peering
+        let covered = 0.1 + 0.2 * hide // never hide the pupils: they're doing the peering
         let restingY = size.height * 0.46
         let duckedY = edgeY - covered * eyeH + eyeH / 2
-        let face = CGPoint(x: size.width / 2 + f.offset.x * H, y: max(restingY, duckedY) + f.offset.y * H)
+        let face = CGPoint(x: size.width / 2 + offset.x * H, y: max(restingY, duckedY) + offset.y * H)
 
         // Blush (behind everything), soft edge faked with two layers.
         if f.blush > 0.01 {
-            for side in [-1.0, 1.0] {
+            for side: CGFloat in [-1, 1] {
                 let c = CGPoint(x: face.x + side * (dx + eyeW * 0.15), y: face.y + H * 0.62)
-                for (grow, alpha) in [(1.3, 0.45), (1.0, 1.0)] {
+                for (grow, alpha): (CGFloat, Double) in [(1.3, 0.45), (1.0, 1.0)] {
                     let w = eyeW * 0.55 * grow, h = eyeW * 0.16 * grow
                     gc.fill(Path(ellipseIn: CGRect(x: c.x - w / 2, y: c.y - h / 2, width: w, height: h)),
                             with: .color(blush.opacity(f.blush * alpha)))
@@ -68,20 +72,20 @@ enum EyesRenderer {
 
         drawMouth(f, in: &gc, at: CGPoint(x: face.x, y: face.y + H * 0.62), H: H)
         drawDecorations(f, in: &gc, face: face, dx: dx, eyeW: eyeW, H: H)
-        drawUnderside(f.hide, edgeY: edgeY, in: &gc, size: size)
+        drawUnderside(hide, edgeY: edgeY, in: &gc, size: size)
     }
 
     /// Where the bed's edge is: off the top of the screen when open, 62% down when nearly shut.
-    private static func underEdge(_ hide: Double, _ size: CGSize) -> CGFloat {
+    private static func underEdge(_ hide: CGFloat, _ size: CGSize) -> CGFloat {
         size.height * 0.62 * hide
     }
 
     /// The bed: a near-black underside with a rail along its edge and a soft shadow below it,
     /// drawn over the eyes so their tops disappear into the dark.
-    private static func drawUnderside(_ hide: Double, edgeY: CGFloat, in gc: inout GraphicsContext, size: CGSize) {
+    private static func drawUnderside(_ hide: CGFloat, edgeY: CGFloat, in gc: inout GraphicsContext, size: CGSize) {
         guard hide > 0.005 else { return }
         var c = gc
-        c.opacity = smoothstep(0, 0.06, hide)
+        c.opacity = smoothstep(0, 0.06, Double(hide))
         let w = size.width
         let rail = size.height * 0.035
         c.fill(Path(CGRect(x: 0, y: 0, width: w, height: edgeY)), with: .color(Color(red: 0.02, green: 0.02, blue: 0.03)))
@@ -110,6 +114,12 @@ enum EyesRenderer {
             return
         }
 
+        let open = CGFloat(s.open)
+        let lidCut = CGFloat(s.lidCut)
+        let tilt = CGFloat(s.lidTilt) * .pi / 180
+        let irisScale = CGFloat(s.irisScale)
+        let pupilScale = CGFloat(s.pupilScale)
+        let look = CGPoint(x: CGFloat(tanh(s.look.x)), y: CGFloat(tanh(s.look.y))) // tanh keeps the iris off the rim
         let openAlpha = smoothstep(0.08, 0.2, s.open)
         if openAlpha < 0.999 {
             drawClosed(s.closedStyle, alpha: 1 - openAlpha, in: &gc, w: w, h: h)
@@ -118,14 +128,14 @@ enum EyesRenderer {
 
         var e = gc
         e.opacity = openAlpha
-        e.scaleBy(x: 1, y: max(0.02, s.open)) // blink: squash toward the center line
+        e.scaleBy(x: 1, y: max(0.02, open)) // blink: squash toward the center line
         let eyeRect = CGRect(x: -w / 2, y: -h / 2, width: w, height: h)
         let eyePath = Path(ellipseIn: eyeRect)
 
         // Lids are clip masks (not filled shapes), so tinted backgrounds show through cleanly.
-        if s.lidCut > 0.005 {
-            let rise = tan(s.lidTilt * .pi / 180) * w / 2
-            let line = -h / 2 + h * s.lidCut
+        if lidCut > 0.005 {
+            let rise = tan(tilt) * w / 2
+            let line = -h / 2 + h * lidCut
             let inner = line + rise, outer = line - rise
             var keep = Path()
             keep.move(to: CGPoint(x: -w, y: isLeft ? outer : inner))
@@ -138,14 +148,14 @@ enum EyesRenderer {
         e.clip(to: eyePath)
         e.fill(eyePath, with: .color(cream))
 
-        // Iris slides under fixed highlights; tanh keeps it off the rim.
-        let iw = w * 0.80 * s.irisScale, ih = h * 0.80 * s.irisScale
-        let ic = CGPoint(x: w * 0.14 * tanh(s.look.x), y: h * 0.10 * tanh(s.look.y))
+        // Iris slides under fixed highlights.
+        let iw = w * 0.80 * irisScale, ih = h * 0.80 * irisScale
+        let ic = CGPoint(x: w * 0.14 * look.x, y: h * 0.10 * look.y)
         let iris = CGRect(x: ic.x - iw / 2, y: ic.y - ih / 2, width: iw, height: ih)
         e.fill(Path(ellipseIn: iris), with: .linearGradient(Gradient(colors: [irisTop, irisBottom]),
                                                              startPoint: CGPoint(x: ic.x, y: iris.minY),
                                                              endPoint: CGPoint(x: ic.x, y: iris.maxY)))
-        let pw = iw * 0.42 * s.pupilScale, ph = ih * 0.50 * s.pupilScale
+        let pw = iw * 0.42 * pupilScale, ph = ih * 0.50 * pupilScale
         e.fill(Path(ellipseIn: CGRect(x: ic.x - pw / 2, y: ic.y - ph / 2, width: pw, height: ph)), with: .color(pupil))
 
         let baseIW = w * 0.80
@@ -193,7 +203,7 @@ enum EyesRenderer {
     }
 
     private static func drawDecorations(_ f: EyesModel.Frame, in gc: inout GraphicsContext, face: CGPoint, dx: CGFloat, eyeW: CGFloat, H: CGFloat) {
-        let t = f.time
+        let t = CGFloat(f.time)
         let rightEye = CGPoint(x: face.x + dx, y: face.y)
         let leftEye = CGPoint(x: face.x - dx, y: face.y)
 
@@ -218,8 +228,8 @@ enum EyesRenderer {
         // Drifting z's while asleep.
         if f.mood == .sleepy {
             for i in 0..<3 {
-                let phase = (t / 2.5 + Double(i) / 3).truncatingRemainder(dividingBy: 1)
-                let alpha = sin(phase * .pi) * 0.7
+                let phase = (t / 2.5 + CGFloat(i) / 3).truncatingRemainder(dividingBy: 1)
+                let alpha = Double(sin(phase * .pi) * 0.7)
                 let text = gc.resolve(Text("z").font(.system(size: H * (0.1 + 0.08 * phase), weight: .heavy, design: .rounded))
                     .foregroundStyle(cream))
                 var c = gc
@@ -230,7 +240,7 @@ enum EyesRenderer {
 
         // Sparkle when someone's close.
         if f.sparkle > 0.01 {
-            let r = eyeW * 0.1 * (1 + 0.15 * sin(4 * t)) * f.sparkle
+            let r = eyeW * 0.1 * (1 + 0.15 * sin(4 * t)) * CGFloat(f.sparkle)
             let c = CGPoint(x: leftEye.x - eyeW * 0.62, y: leftEye.y + H * 0.38)
             gc.fill(star(at: c, radius: r), with: .color(cream.opacity(f.sparkle)))
         }
@@ -245,13 +255,14 @@ enum EyesRenderer {
             drop.addQuadCurve(to: CGPoint(x: c.x + r, y: c.y), control: CGPoint(x: c.x + r * 0.9, y: c.y - r * 1.2))
             drop.addArc(center: c, radius: r, startAngle: .zero, endAngle: .degrees(180), clockwise: false)
             drop.addQuadCurve(to: CGPoint(x: c.x, y: c.y - r * 2.1), control: CGPoint(x: c.x - r * 0.9, y: c.y - r * 1.2))
-            gc.fill(drop, with: .color(Color(red: 0.56, green: 0.83, blue: 1).opacity(f.sweat * (1 - 0.5 * slide))))
+            gc.fill(drop, with: .color(Color(red: 0.56, green: 0.83, blue: 1).opacity(f.sweat * Double(1 - 0.5 * slide))))
         }
 
         // "Ta-da!" sparkle burst after peeking back out.
         if f.burst > 0 {
-            let size = eyeW * 0.09 * sin(.pi * f.burst)
-            let radius = H * (0.55 + 0.25 * f.burst)
+            let burst = CGFloat(f.burst)
+            let size = eyeW * 0.09 * sin(.pi * burst)
+            let radius = H * (0.55 + 0.25 * burst)
             for eye in [leftEye, rightEye] {
                 for k in 0..<4 {
                     let angle = CGFloat(k) * .pi / 2 + .pi / 4
@@ -278,7 +289,7 @@ enum EyesRenderer {
     private static func angerMark(at c: CGPoint, size L: CGFloat) -> Path {
         let g = L * 0.3 // half-width of the plus-shaped gap
         var p = Path()
-        for (sx, sy) in [(1.0, 1.0), (-1.0, 1.0), (-1.0, -1.0), (1.0, -1.0)] {
+        for (sx, sy): (CGFloat, CGFloat) in [(1, 1), (-1, 1), (-1, -1), (1, -1)] {
             p.move(to: CGPoint(x: c.x + sx * g, y: c.y + sy * L))
             p.addQuadCurve(to: CGPoint(x: c.x + sx * L, y: c.y + sy * g),
                            control: CGPoint(x: c.x + sx * g * 0.35, y: c.y + sy * g * 0.35))
