@@ -4,8 +4,12 @@ import Foundation
 /// `pmset` so the fail-safe rules can be tested:
 /// - disarm restores sleep immediately;
 /// - the app vanishing while armed triggers relaunches for `relaunchGraceSeconds`, then sleep is restored;
-/// - no heartbeat for `leaseSeconds` (app hung) restores sleep.
+/// - no heartbeat for `leaseSeconds` (app hung) restores sleep;
+/// - the lease belongs to the user who armed it: another user can't take it over or clear it, and only
+///   that user's connections that have actually spoken (so passed the signing check) keep it alive.
 public final class HelperLease {
+    /// Identifies one XPC connection.
+    public typealias Client = Int
     public struct Actions {
         public var setSleepDisabled: (Bool) -> (Bool, String?)
         public var relaunchApp: () -> Void
@@ -21,12 +25,14 @@ public final class HelperLease {
 
     public private(set) var isArmed = false
     public private(set) var isAwaitingRelaunch = false
+    /// The user who armed the lease; relaunches happen as them.
+    public private(set) var ownerUID: UInt32?
 
     private let actions: Actions
     private let now: () -> Date
     private var lastHeartbeat: Date
     private var awaitingRelaunchSince: Date?
-    private var connections = 0
+    private var clients = Set<Client>()
 
     public init(actions: Actions, now: @escaping () -> Date = Date.init) {
         self.actions = actions
@@ -35,32 +41,39 @@ public final class HelperLease {
     }
 
     @discardableResult
-    public func arm() -> (Bool, String?) {
+    public func arm(client: Client, uid: UInt32) -> (Bool, String?) {
+        if isArmed, let ownerUID, ownerUID != uid {
+            actions.log("refusing arm from uid \(uid): uid \(ownerUID) is guarding")
+            return (false, "Another user on this Mac is already guarding.")
+        }
+        ownerUID = uid
+        clients.insert(client)
         isArmed = true
         setAwaiting(nil)
         lastHeartbeat = now()
         return actions.setSleepDisabled(true)
     }
 
-    public func heartbeat() {
+    public func heartbeat(client: Client, uid: UInt32) {
+        guard isArmed, uid == ownerUID else { return }
+        clients.insert(client)
         lastHeartbeat = now()
         setAwaiting(nil)
     }
 
     @discardableResult
-    public func disarm() -> (Bool, String?) {
+    public func disarm(client: Client, uid: UInt32) -> (Bool, String?) {
+        if isArmed, let ownerUID, ownerUID != uid {
+            actions.log("refusing disarm from uid \(uid): uid \(ownerUID) is guarding")
+            return (false, "Another user on this Mac is guarding.")
+        }
         isArmed = false
         setAwaiting(nil)
         return actions.setSleepDisabled(false)
     }
 
-    public func connected() {
-        connections += 1
-    }
-
-    public func disconnected() {
-        connections = max(0, connections - 1)
-        guard connections == 0 else { return }
+    public func disconnected(client: Client) {
+        guard clients.remove(client) != nil, clients.isEmpty else { return }
         guard isArmed else {
             _ = actions.setSleepDisabled(false)
             return

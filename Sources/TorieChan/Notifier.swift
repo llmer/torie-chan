@@ -58,16 +58,29 @@ final class Notifier {
 
     var isConfigured: Bool { isEnabled && Self.looksLikeHandle(handle) }
 
+    /// A phone number or email, and nothing else. The handle is passed to osascript, so it must never be
+    /// able to look like an option (a leading "-") or carry characters an address doesn't need.
     static func looksLikeHandle(_ s: String) -> Bool {
         let t = s.trimmingCharacters(in: .whitespaces)
-        if t.contains("@") { return t.split(separator: "@").count == 2 && t.contains(".") }
-        return t.filter(\.isNumber).count >= 7
+        guard !t.isEmpty, t.count <= 254, !t.hasPrefix("-") else { return false }
+        if t.contains("@") {
+            let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.@_+-")
+            let parts = t.split(separator: "@", omittingEmptySubsequences: false)
+            return t.unicodeScalars.allSatisfy(allowed.contains) && parts.count == 2
+                && !parts[0].isEmpty && parts[1].contains(".") && !parts[1].hasPrefix(".") && !parts[1].hasSuffix(".")
+        }
+        let allowed = CharacterSet(charactersIn: "0123456789+()-. ")
+        return t.unicodeScalars.allSatisfy(allowed.contains) && t.filter(\.isNumber).count >= 7
     }
 
     /// Send "Torie-chan: <title>\n<body>\n<time>". `force` skips the enabled check and cooldown (test button).
     func send(_ title: String, _ body: String, priority: Priority = .normal, attachment: URL? = nil, force: Bool = false,
               completion: ((String?) -> Void)? = nil) {
         guard force || isConfigured else { return }
+        guard Self.looksLikeHandle(handle) else {
+            completion?("That doesn't look like a phone number or email.")
+            return
+        }
         let now = self.now()
         if !force, let last = lastSent[priority], now.timeIntervalSince(last) < priority.cooldown { return }
         lastSent[priority] = now
@@ -108,11 +121,16 @@ final class Notifier {
         "end run",
     ]
 
+    /// osascript's command line. "--" ends its options: without it, an argument starting with "-e" would run as script.
+    static func osascriptArguments(_ args: [String]) -> [String] {
+        script.flatMap { ["-e", $0] } + ["--"] + args
+    }
+
     /// Returns a human-readable error, or nil on success.
     static func run(_ args: [String]) -> String? {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-        p.arguments = script.flatMap { ["-e", $0] } + args
+        p.arguments = osascriptArguments(args)
         let err = Pipe()
         p.standardError = err
         p.standardOutput = Pipe()

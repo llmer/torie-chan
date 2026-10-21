@@ -134,6 +134,39 @@ final class MCPServerTests: XCTestCase {
         XCTAssertTrue(result.text.contains("not running"))
     }
 
+    func testAClientTricklingBytesCantBlockTheSocket() throws {
+        try startFakeApp { _ in ControlResponse(ok: true, status: Self.status) }
+        let fd = socket(AF_UNIX, SOCK_STREAM, 0)
+        var addr = sockaddr_un()
+        addr.sun_family = sa_family_t(AF_UNIX)
+        withUnsafeMutableBytes(of: &addr.sun_path) { buf in
+            buf.copyBytes(from: GuardIDs.controlSocketPath.utf8)
+            buf[GuardIDs.controlSocketPath.utf8.count] = 0
+        }
+        let connected = withUnsafePointer(to: &addr) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { connect(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size)) }
+        }
+        XCTAssertEqual(connected, 0)
+        let stop = DispatchSemaphore(value: 0)
+        DispatchQueue.global().async {
+            var byte: UInt8 = 0x20
+            while stop.wait(timeout: .now() + 0.5) == .timedOut { _ = write(fd, &byte, 1) }
+            close(fd)
+        }
+        defer { stop.signal() }
+
+        let started = Date()
+        let replied = expectation(description: "status")
+        var response: ControlResponse?
+        DispatchQueue.global().async {
+            response = try? ControlClient.send(ControlRequest(command: .status))
+            replied.fulfill()
+        }
+        wait(for: [replied], timeout: 10)
+        XCTAssertEqual(response?.status?.state, "arming")
+        XCTAssertLessThan(Date().timeIntervalSince(started), 7)
+    }
+
     func testTheControlSocketIsPrivateToTheUser() throws {
         try startFakeApp { _ in ControlResponse(ok: true, status: Self.status) }
         let attributes = try FileManager.default.attributesOfItem(atPath: GuardIDs.controlSocketPath)

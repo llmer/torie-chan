@@ -239,6 +239,13 @@ final class GuardControllerTests: XCTestCase {
         XCTAssertFalse(note.contains("\n"))
     }
 
+    func testAHugeCountdownFromTheSocketIsClamped() {
+        let h = GuardHarness()
+        XCTAssertTrue(h.guardian.handle(ControlRequest(command: .arm, countdownSeconds: Int.max)).ok)
+        guard case .arming(let until) = h.guardian.phase else { return XCTFail("not arming") }
+        XCTAssertEqual(until.timeIntervalSince(h.clock.date), Double(GuardController.maxAgentCountdown), accuracy: 0.01)
+    }
+
     func testAnAgentCantRewriteTheNoteOnceArmed() {
         let h = GuardHarness()
         _ = h.guardian.handle(ControlRequest(command: .arm, note: "Back in 5"))

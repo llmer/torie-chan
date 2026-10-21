@@ -53,7 +53,9 @@ first, and save the loud tests for the end.
 - [ ] Touch ID on the guard screen disarms (no system pop-up appears)
 - [ ] Three wrong codes lock the keypad and sound the alarm; the lockout survives quitting and relaunching
 - [ ] After disarming, closing the lid puts the Mac to sleep normally (lid-close sleep was restored)
-- [ ] Force-quitting Torie-chan while armed (Activity Monitor) relaunches it straight into the alarm
+- [ ] Force-quitting Torie-chan while armed (Activity Monitor) relaunches it straight into the alarm,
+      and the relaunched app runs as you, not root: `ps -o user= -p $(pgrep -x TorieChan)` prints your
+      username
 
 ### Alerts
 
