@@ -254,7 +254,7 @@ enum EyesRenderer {
             let radius = H * (0.55 + 0.25 * f.burst)
             for eye in [leftEye, rightEye] {
                 for k in 0..<4 {
-                    let angle = Double(k) * .pi / 2 + .pi / 4
+                    let angle = CGFloat(k) * .pi / 2 + .pi / 4
                     let c = CGPoint(x: eye.x + radius * cos(angle) * 0.8, y: eye.y + radius * sin(angle))
                     gc.fill(star(at: c, radius: size), with: .color(cream))
                 }
@@ -290,7 +290,7 @@ enum EyesRenderer {
     private static func star(at c: CGPoint, radius r: CGFloat) -> Path {
         var p = Path()
         for k in 0..<8 {
-            let angle = Double(k) * .pi / 4 - .pi / 2
+            let angle = CGFloat(k) * .pi / 4 - .pi / 2
             let rr = k.isMultiple(of: 2) ? r : r * 0.32
             let point = CGPoint(x: c.x + rr * cos(angle), y: c.y + rr * sin(angle))
             if k == 0 { p.move(to: point) } else { p.addLine(to: point) }
