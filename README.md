@@ -127,7 +127,9 @@ publishes a release with the disk image and its SHA-256:
 git tag v0.1.0 && git push origin v0.1.0
 ```
 
-For builds that open cleanly on any Mac (and support lid-close protection), add these repository secrets:
+For builds that open cleanly on any Mac (and support lid-close protection), add these as secrets of the
+**`release` environment** (Settings > Environments > release). Only `v*` tags can deploy to that environment,
+so branch and pull request builds can never read them:
 
 | Secret | What it is |
 |---|---|

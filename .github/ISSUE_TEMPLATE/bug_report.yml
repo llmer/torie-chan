@@ -1,0 +1,39 @@
+name: Bug report
+description: Something isn't working
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Arm the guard from the menu bar
+        2. Close the lid halfway
+        3. ...
+  - type: input
+    id: version
+    attributes:
+      label: Torie-chan version
+      description: Torie-chan > About Torie-chan
+      placeholder: "0.1.1"
+    validations:
+      required: true
+  - type: input
+    id: mac
+    attributes:
+      label: Mac model and macOS version
+      placeholder: "MacBook Pro M3 Pro, macOS 26.1"
+    validations:
+      required: true
+  - type: textarea
+    id: events
+    attributes:
+      label: Event log (optional)
+      description: Settings > Privacy & Data shows recent events. Remove anything you don't want to share.
