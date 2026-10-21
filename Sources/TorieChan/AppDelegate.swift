@@ -60,7 +60,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             promptMoveToApplications()
         }
 
-        if ArmedMarker.exists {
+        if guardian.armedMarker.exists {
             // We were killed mid-guard (the helper relaunches us). Come back up screaming.
             guardian.resumeAfterTamper()
         } else if let dir = Self.argument(after: "--snapshot-settings") {

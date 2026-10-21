@@ -68,7 +68,7 @@ final class GuardController: ObservableObject {
     private static let warnLines = ["Hey! Paws off, please.", "Um, that's not yours!", "Hands off. I'm watching!"]
 
     @Published private(set) var phase: GuardPhase = .disarmed
-    @Published private(set) var now = Date()
+    @Published private(set) var now = Date.distantPast
     @Published private(set) var note: String?
     @Published private(set) var armedSince: Date?
     @Published private(set) var expectedBack: Date?
@@ -93,19 +93,20 @@ final class GuardController: ObservableObject {
     @Published var sensitivity: Sensitivity {
         didSet {
             detector.sensitivity = sensitivity
-            UserDefaults.standard.set(sensitivity.rawValue, forKey: "sensitivity")
+            defaults.set(sensitivity.rawValue, forKey: "sensitivity")
         }
     }
 
     @Published var acknowledgedResponsibility: Bool {
-        didSet { UserDefaults.standard.set(acknowledgedResponsibility, forKey: "acknowledgedResponsibility") }
+        didSet { defaults.set(acknowledgedResponsibility, forKey: "acknowledgedResponsibility") }
     }
 
     let eyes = EyesModel()
-    let passcode = Passcode()
-    let events = EventLog()
-    let sleepGuard = SleepGuard()
-    let notifier = Notifier()
+    let passcode: Passcode
+    let events: EventLog
+    let notifier: Notifier
+    /// The concrete helper manager, for Settings (install/remove). The guard itself talks to `sleep`.
+    let sleepGuard: SleepGuard
 
     var onPhaseChange: ((GuardPhase) -> Void)?
     var onNeedsSetup: (() -> Void)?
@@ -115,12 +116,21 @@ final class GuardController: ObservableObject {
     var cameraSession: AVCaptureSession { tracker.session }
     private(set) var lastSession: SessionSummary?
 
-    private let motion = MotionSensor()
+    private let motion: MotionSource
     private let detector = MotionDetector()
-    private let system = SystemMonitor()
-    private let tracker = PersonTracker()
-    private let alarm = Alarm()
-    private let lidFeed = LidAngleFeed()
+    private let system: SystemSource
+    private let tracker: CameraSource
+    private let alarm: AlarmOutput
+    private let sleep: SleepControl
+    private let lidFeed: LidAngleFeed?
+    private let defaults: UserDefaults
+    private let clock: () -> Date
+    private let audioFingerprint: () -> AudioOutput.Fingerprint
+    private let lidAngleReading: () -> Int?
+    private let motionAvailable: () -> Bool
+    private let cameraAllowed: () -> Bool
+    private let dataDirectory: URL
+    let armedMarker: ArmedMarker
 
     private var tickTimer: Timer?
     private var calibrationStarted = false
@@ -133,7 +143,7 @@ final class GuardController: ObservableObject {
     private var saidPutItDown = false
     private var warnLineIndex = 0
     private var lastUserInputAt = Date.distantPast
-    private var lastKeypadActivity = Date()
+    private var lastKeypadActivity = Date.distantPast
     private var lastLingerSpeech = Date.distantPast
     private var lastCloseLogAt = Date.distantPast
     private var lastPersonLogAt = Date.distantPast
@@ -145,15 +155,38 @@ final class GuardController: ObservableObject {
     private var testTimer: Timer?
     private var observers: [NSObjectProtocol] = []
 
-    init() {
-        sensitivity = Sensitivity(rawValue: UserDefaults.standard.string(forKey: "sensitivity") ?? "") ?? .medium
-        acknowledgedResponsibility = UserDefaults.standard.bool(forKey: "acknowledgedResponsibility")
+    convenience init() {
+        self.init(environment: .live())
+    }
+
+    init(environment env: GuardEnvironment) {
+        motion = env.motion
+        system = env.system
+        tracker = env.camera
+        alarm = env.alarm
+        sleep = env.sleep
+        sleepGuard = (env.sleep as? SleepGuard) ?? SleepGuard()
+        notifier = env.notifier
+        passcode = env.passcode
+        defaults = env.defaults
+        clock = env.now
+        audioFingerprint = env.audioFingerprint
+        lidAngleReading = env.lidAngle
+        motionAvailable = env.motionAvailable
+        cameraAllowed = env.cameraAllowed
+        dataDirectory = env.dataDirectory
+        lidFeed = env.feedsLidAngle ? LidAngleFeed() : nil
+        events = EventLog(url: env.dataDirectory.appendingPathComponent("events.jsonl"))
+        armedMarker = ArmedMarker(directory: env.dataDirectory)
+        sensitivity = Sensitivity(rawValue: env.defaults.string(forKey: "sensitivity") ?? "") ?? .medium
+        acknowledgedResponsibility = env.defaults.bool(forKey: "acknowledgedResponsibility")
         detector.sensitivity = sensitivity
-        lastSession = Self.loadLastSession()
+        lastSession = Self.loadLastSession(from: env.dataDirectory)
+        now = env.now()
 
         motion.onAccel = { [weak self] a in
             guard let self else { return }
-            let grab = self.detector.ingestAccel(a)
+            let grab = self.detector.ingestAccel(a, at: self.clock())
             self.eyes.jolt = self.detector.jolt
             self.eyes.agitation = self.detector.agitation
             if let grab { self.handleGrab(grab) } else { self.evaluateAgitation() }
@@ -166,7 +199,7 @@ final class GuardController: ObservableObject {
         system.onChange = { [weak self] old, new in self?.handleSystemChange(old, new) }
         tracker.onObservation = { [weak self] obs in self?.handlePeople(obs) }
         tracker.onScene = { [weak self] scene in self?.handleScene(scene) }
-        sleepGuard.onLidProtectionChange = { [weak self] value in
+        sleep.onLidProtectionChange = { [weak self] value in
             guard let self else { return }
             self.lidProtection = value
             if self.phase.isGuarding, value != .active, value != .inactive {
@@ -204,9 +237,9 @@ final class GuardController: ObservableObject {
         // At least 2s so there's a quiet window to calibrate the resting pose.
         let seconds = max(2, countdown)
         note = AgentText.sanitize(rawNote, maxLength: 60)
-        expectedBack = expectedBackMinutes.map { Date().addingTimeInterval(TimeInterval(max(1, min(240, $0)) * 60)) }
+        expectedBack = expectedBackMinutes.map { clock().addingTimeInterval(TimeInterval(max(1, min(240, $0)) * 60)) }
         overdueNotified = false
-        phase = .arming(until: Date().addingTimeInterval(TimeInterval(seconds)))
+        phase = .arming(until: clock().addingTimeInterval(TimeInterval(seconds)))
         peopleSeen = 0
         agentUpdate = nil
         calibrationStarted = false
@@ -216,10 +249,10 @@ final class GuardController: ObservableObject {
         hideKeypad()
         lastUserInputAt = .distantPast
         detector.ownerLeeway = false
-        session = SessionSummary(startedAt: Date())
-        ArmedMarker.write(note: note)
+        session = SessionSummary(startedAt: clock())
+        armedMarker.write(note: note, at: clock())
 
-        sleepGuard.engage()
+        sleep.engage()
         detector.reset()
         if !motion.start() {
             events.add("sensor", "Motion sensor unavailable: \(motion.lastError ?? "unknown")")
@@ -235,8 +268,8 @@ final class GuardController: ObservableObject {
             }
         }
         eyes.mood = .calm
-        eyes.lidReferenceAngle = LidAngleSensor.shared.angle().map(Double.init)
-        lidFeed.start { [weak self] angle in self?.eyes.lidAngle = angle }
+        eyes.lidReferenceAngle = lidAngleReading().map(Double.init)
+        lidFeed?.start { [weak self] angle in self?.eyes.lidAngle = angle }
         eyes.start()
 
         tickTimer?.invalidate()
@@ -253,9 +286,9 @@ final class GuardController: ObservableObject {
 
     /// The app was killed or crashed while armed and has been relaunched (by the helper, or by hand).
     func resumeAfterTamper() {
-        guard ArmedMarker.exists else { return }
+        guard armedMarker.exists else { return }
         events.add("tamper", "Torie-chan was force-quit or crashed while armed")
-        let previousNote = ArmedMarker.read()?.note
+        let previousNote = armedMarker.read()?.note
         if arm(countdown: 2, note: previousNote) == nil {
             triggerAlarm("Guard app was force-quit while armed")
         }
@@ -267,8 +300,8 @@ final class GuardController: ObservableObject {
         armedOnAC = s.onACPower
         armedLidAngle = s.lidAngle
         if let angle = s.lidAngle { eyes.lidReferenceAngle = Double(angle) }
-        armedAudio = AudioOutput.fingerprint()
-        armedSince = Date()
+        armedAudio = audioFingerprint()
+        armedSince = clock()
         tracker.captureSceneReference()
         phase = .armed
         eyes.mood = .calm
@@ -294,13 +327,13 @@ final class GuardController: ObservableObject {
     func readinessDetail() -> (protections: [String], gaps: [Gap]) {
         var protections: [String] = []
         var gaps: [Gap] = []
-        if motion.isRunning || (phase == .disarmed && MotionSensor.isAvailable) {
+        if motion.isRunning || (phase == .disarmed && motionAvailable()) {
             protections.append("Being moved or picked up")
         } else {
             gaps.append(Gap(text: "No motion sensor: moving the laptop won't be noticed",
                             agentText: "no motion sensor, so moving the laptop won't be noticed", fix: .none))
         }
-        let helperReady = lidProtection == .active || (lidProtection == .inactive && sleepGuard.helperStatus == .enabled)
+        let helperReady = lidProtection == .active || (lidProtection == .inactive && sleep.helperStatus == .enabled)
         if helperReady {
             protections.append("Lid closed")
         } else {
@@ -312,10 +345,10 @@ final class GuardController: ObservableObject {
         if phase == .disarmed || phase.name == "arming" ? system.refresh().onACPower : armedOnAC {
             protections.append("Charger unplugged")
         }
-        if LidAngleSensor.shared.angle() != nil { protections.append("Screen being lowered") }
+        if lidAngleReading() != nil { protections.append("Screen being lowered") }
         protections.append("Screen locked, power button pressed, or shut down")
         protections.append("Headphones or adapters plugged in")
-        let cameraAllowed = AVCaptureDevice.authorizationStatus(for: .video) == .authorized
+        let cameraAllowed = cameraAllowed()
         if cameraState == .running || (cameraAllowed && (phase == .disarmed || phase.name == "arming")) {
             protections.append("Camera covered")
         } else {
@@ -349,8 +382,8 @@ final class GuardController: ObservableObject {
 
     // MARK: - Ticks
 
-    private func tick() {
-        now = Date()
+    func tick() {
+        now = clock()
 
         switch phase {
         case .arming(let until):
@@ -385,7 +418,7 @@ final class GuardController: ObservableObject {
             }
             if now.timeIntervalSince(lastAudioCheck) > 0.5 {
                 lastAudioCheck = now
-                if let armedAudio, AudioOutput.fingerprint() != armedAudio { trigger("Audio device plugged in or removed") }
+                if let armedAudio, audioFingerprint() != armedAudio { trigger("Audio device plugged in or removed") }
             }
         }
         if phase.isGuarding, let lost = focusLostAt, now.timeIntervalSince(lost) > Self.focusLossSeconds {
@@ -422,7 +455,7 @@ final class GuardController: ObservableObject {
         if let armedLidAngle, let angle = s.lidAngle, abs(angle - armedLidAngle) > 15, !detector.ownerLeeway {
             return "Screen lowered"
         }
-        if let armedAudio, AudioOutput.fingerprint() != armedAudio { return "Audio device plugged in" }
+        if let armedAudio, audioFingerprint() != armedAudio { return "Audio device plugged in" }
         if motion.isRunning, !motion.isHealthy { return "Motion sensor stopped reporting" }
         if cameraCovered, !s.lidClosed { return "Camera covered" }
         if cameraShifted, peopleInView == 0 { return "Moved (camera view shifted)" }
@@ -528,7 +561,7 @@ final class GuardController: ObservableObject {
         on(NotificationCenter.default, ProcessInfo.thermalStateDidChangeNotification) { [weak self] in self?.thermalChanged() }
     }
 
-    private func tamper(_ reason: String) {
+    func tamper(_ reason: String) {
         guard phase.isGuarding else { return }
         triggerAlarm(reason)
     }
@@ -542,7 +575,7 @@ final class GuardController: ObservableObject {
         case .critical:
             tracker.setLowPower(true)
             if system.refresh().lidClosed {
-                sleepGuard.dropLidProtection(reason: "Mac overheating with the lid closed")
+                sleep.dropLidProtection(reason: "Mac overheating with the lid closed")
                 events.add("thermal", "Mac overheating with the lid closed; letting it sleep to protect it")
             }
         default:
@@ -559,7 +592,7 @@ final class GuardController: ObservableObject {
         } else if wasFocused, phase.isGuarding, focusLostAt == nil {
             // Only *losing* focus is suspicious. Starting unfocused (macOS refused to activate a
             // background-launched app) is shown on screen as "click to lock the keyboard" instead.
-            focusLostAt = Date()
+            focusLostAt = clock()
         }
     }
 
@@ -572,7 +605,7 @@ final class GuardController: ObservableObject {
     /// or from a lid/charger/pose problem still being true when the grace period ends.
     private func trigger(_ reason: String, fromMotion: Bool = false, grace: TimeInterval = graceSeconds) {
         guard phase == .armed else { return }
-        let now = Date()
+        let now = clock()
         suspiciousSince = now
         suspicionFromMotion = fromMotion
         saidPutItDown = false
@@ -593,7 +626,7 @@ final class GuardController: ObservableObject {
 
     /// Any key, click, scroll or trackpad movement on the guard screen.
     func noteUserInput() {
-        let now = Date()
+        let now = clock()
         lastUserInputAt = now
         detector.ownerLeeway = true
         // The owner's own touch often registers as a bump a moment before the key press arrives.
@@ -625,9 +658,10 @@ final class GuardController: ObservableObject {
         guard let jpeg = tracker.snapshotJPEG() else { return nil }
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd_HH-mm-ss"
-        let url = GuardIDs.snapshotsDirectory.appendingPathComponent("alarm_\(formatter.string(from: Date())).jpg")
+        let snapshots = dataDirectory.appendingPathComponent("Snapshots", isDirectory: true)
+        let url = snapshots.appendingPathComponent("alarm_\(formatter.string(from: clock())).jpg")
         do {
-            try FileManager.default.createDirectory(at: GuardIDs.snapshotsDirectory, withIntermediateDirectories: true,
+            try FileManager.default.createDirectory(at: snapshots, withIntermediateDirectories: true,
                                                     attributes: [.posixPermissions: 0o700])
             try jpeg.write(to: url, options: .atomic)
             chmod(url.path, 0o600)
@@ -641,7 +675,7 @@ final class GuardController: ObservableObject {
 
     private func handlePeople(_ obs: PersonTracker.Observation) {
         guard phase.isGuarding else { return }
-        let now = Date()
+        let now = clock()
         let wasClose = eyes.someoneClose
         eyes.react(to: obs, playful: phase == .armed)
         if obs.arrived > 0 {
@@ -671,7 +705,7 @@ final class GuardController: ObservableObject {
 
     func showKeypad() {
         guard phase.isGuarding else { return }
-        lastKeypadActivity = Date()
+        lastKeypadActivity = clock()
         guard !keypadVisible else { return }
         keypadVisible = true
         keypadMessage = nil
@@ -689,24 +723,24 @@ final class GuardController: ObservableObject {
 
     func typeDigit(_ d: Character) {
         showKeypad()
-        lastKeypadActivity = Date()
+        lastKeypadActivity = clock()
         guard entry.count < 12 else { return }
         entry.append(d)
         keypadMessage = nil
     }
 
     func clearEntry() {
-        lastKeypadActivity = Date()
+        lastKeypadActivity = clock()
         entry = ""
     }
 
     func deleteDigit() {
-        lastKeypadActivity = Date()
+        lastKeypadActivity = clock()
         if !entry.isEmpty { entry.removeLast() }
     }
 
     func submitEntry() {
-        lastKeypadActivity = Date()
+        lastKeypadActivity = clock()
         guard !entry.isEmpty else { return }
         let code = entry
         entry = ""
@@ -753,12 +787,12 @@ final class GuardController: ObservableObject {
         guard phase.isGuarding else { return }
         let wasAlarm = phase.name == "alarm"
         alarm.stop()
-        sleepGuard.release()
+        sleep.release()
         motion.stop()
         detector.reset()
         system.stop()
-        tracker.stop()
-        lidFeed.stop()
+        tracker.stop(wait: false)
+        lidFeed?.stop()
         eyes.lidAngle = nil
         eyes.lidReferenceAngle = nil
         tickTimer?.invalidate()
@@ -766,14 +800,14 @@ final class GuardController: ObservableObject {
         hideKeypad()
         detector.ownerLeeway = false
         suspicionFromMotion = false
-        ArmedMarker.clear()
+        armedMarker.clear()
 
-        var summary = session ?? SessionSummary(startedAt: armedSince ?? Date())
-        summary.endedAt = Date()
+        var summary = session ?? SessionSummary(startedAt: armedSince ?? clock())
+        summary.endedAt = clock()
         summary.disarmedWith = method
         session = nil
         lastSession = summary
-        Self.saveLastSession(summary)
+        Self.saveLastSession(summary, in: dataDirectory)
         events.add("disarmed", "Disarmed with \(method) " + summary.sentence)
         if wasAlarm { notifier.send("Disarmed", "Disarmed with \(method). All quiet.", priority: .low) }
 
@@ -863,20 +897,20 @@ final class GuardController: ObservableObject {
     func deleteAllData() {
         guard phase == .disarmed else { return }
         events.clear()
-        try? FileManager.default.removeItem(at: GuardIDs.snapshotsDirectory)
-        try? FileManager.default.removeItem(at: Self.lastSessionURL)
+        try? FileManager.default.removeItem(at: dataDirectory.appendingPathComponent("Snapshots", isDirectory: true))
+        try? FileManager.default.removeItem(at: Self.lastSessionURL(in: dataDirectory))
         lastSession = nil
         objectWillChange.send()
     }
 
-    private static var lastSessionURL: URL { GuardIDs.supportDirectory.appendingPathComponent("last_session.json") }
+    private static func lastSessionURL(in directory: URL) -> URL { directory.appendingPathComponent("last_session.json") }
 
-    private static func loadLastSession() -> SessionSummary? {
-        (try? Data(contentsOf: lastSessionURL)).flatMap { try? ControlCoding.decoder.decode(SessionSummary.self, from: $0) }
+    private static func loadLastSession(from directory: URL) -> SessionSummary? {
+        (try? Data(contentsOf: lastSessionURL(in: directory))).flatMap { try? ControlCoding.decoder.decode(SessionSummary.self, from: $0) }
     }
 
-    private static func saveLastSession(_ summary: SessionSummary) {
-        try? ControlCoding.encoder.encode(summary).write(to: lastSessionURL, options: .atomic)
+    private static func saveLastSession(_ summary: SessionSummary, in directory: URL) {
+        try? ControlCoding.encoder.encode(summary).write(to: lastSessionURL(in: directory), options: .atomic)
     }
 
     // MARK: - Control socket / MCP
@@ -920,25 +954,29 @@ final class GuardController: ObservableObject {
 
 /// A file that exists exactly while the guard is armed. If the app starts and finds it, the app
 /// was killed mid-guard, so it comes back up in the alarm state.
-enum ArmedMarker {
+struct ArmedMarker {
     struct Contents: Codable {
         var since: Date
         var note: String?
     }
 
-    private static var url: URL { GuardIDs.supportDirectory.appendingPathComponent("armed.json") }
+    let url: URL
 
-    static var exists: Bool { FileManager.default.fileExists(atPath: url.path) }
-
-    static func write(note: String?) {
-        try? ControlCoding.encoder.encode(Contents(since: Date(), note: note)).write(to: url, options: .atomic)
+    init(directory: URL) {
+        url = directory.appendingPathComponent("armed.json")
     }
 
-    static func read() -> Contents? {
+    var exists: Bool { FileManager.default.fileExists(atPath: url.path) }
+
+    func write(note: String?, at date: Date) {
+        try? ControlCoding.encoder.encode(Contents(since: date, note: note)).write(to: url, options: .atomic)
+    }
+
+    func read() -> Contents? {
         (try? Data(contentsOf: url)).flatMap { try? ControlCoding.decoder.decode(Contents.self, from: $0) }
     }
 
-    static func clear() {
+    func clear() {
         try? FileManager.default.removeItem(at: url)
     }
 }

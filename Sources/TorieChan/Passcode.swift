@@ -10,12 +10,17 @@ import Security
 ///
 /// Wrong guesses escalate: 3 free tries, then lockouts of 10s, 20s, 40s… (capped at 15 min),
 /// persisted so relaunching the app doesn't reset them.
+/// Where the hashed code lives. The app uses the keychain; tests use memory.
+protocol PasscodeStore {
+    /// `.success(nil)` means no code is stored; `.failure` means it couldn't be read (locked).
+    func read(interactive: Bool) -> Result<Data?, PasscodeError>
+    func write(_ data: Data) throws
+}
+
 final class Passcode {
     enum LoadState { case loaded, notSet, needsUnlock }
 
-    private static let service = "com.mostperfectsip.toriechan.passcode"
-    private static let account = "owner"
-    private static let iterations: UInt32 = 200_000
+    static let defaultIterations: UInt32 = 200_000
 
     private struct Stored: Codable {
         var salt: Data
@@ -26,20 +31,31 @@ final class Passcode {
     private var stored: Stored?
     private(set) var loadState: LoadState = .notSet
 
+    private let store: PasscodeStore
+    private let defaults: UserDefaults
+    private let now: () -> Date
+    private let iterations: UInt32
+
     var isSet: Bool { stored != nil }
     /// Codes set before the 6-digit minimum still work, but Settings nudges to upgrade.
-    var isShort: Bool { (UserDefaults.standard.object(forKey: "passcodeLength") as? Int).map { $0 < Self.minLength } ?? false }
+    var isShort: Bool { (defaults.object(forKey: "passcodeLength") as? Int).map { $0 < Self.minLength } ?? false }
 
     static let minLength = 6
     static let freeAttempts = 3
 
-    init() {
+    init(store: PasscodeStore = KeychainPasscodeStore(), defaults: UserDefaults = .standard,
+         now: @escaping () -> Date = Date.init, iterations: UInt32 = Passcode.defaultIterations) {
+        self.store = store
+        self.defaults = defaults
+        self.now = now
+        self.iterations = iterations
         load(interactive: false)
     }
 
     func load(interactive: Bool) {
-        switch Self.read(interactive: interactive) {
-        case .success(let value):
+        switch store.read(interactive: interactive) {
+        case .success(let data):
+            let value = data.flatMap { try? JSONDecoder().decode(Stored.self, from: $0) }
             stored = value
             loadState = value == nil ? .notSet : .loaded
         case .failure:
@@ -55,13 +71,13 @@ final class Passcode {
     // MARK: - Lockout
 
     private var failures: Int {
-        get { UserDefaults.standard.integer(forKey: "passcodeFailures") }
-        set { UserDefaults.standard.set(newValue, forKey: "passcodeFailures") }
+        get { defaults.integer(forKey: "passcodeFailures") }
+        set { defaults.set(newValue, forKey: "passcodeFailures") }
     }
 
     var lockedUntil: Date? {
-        get { (UserDefaults.standard.object(forKey: "passcodeLockedUntil") as? Date).flatMap { $0 > Date() ? $0 : nil } }
-        set { UserDefaults.standard.set(newValue, forKey: "passcodeLockedUntil") }
+        get { (defaults.object(forKey: "passcodeLockedUntil") as? Date).flatMap { $0 > now() ? $0 : nil } }
+        set { defaults.set(newValue, forKey: "passcodeLockedUntil") }
     }
 
     enum Attempt: Equatable {
@@ -81,7 +97,7 @@ final class Passcode {
         failures += 1
         if failures < Self.freeAttempts { return .wrong(remainingFreeTries: Self.freeAttempts - failures) }
         let seconds = min(900, 10 * pow(2, Double(failures - Self.freeAttempts)))
-        let until = Date().addingTimeInterval(seconds)
+        let until = now().addingTimeInterval(seconds)
         lockedUntil = until
         return .lockedOut(until: until)
     }
@@ -108,11 +124,11 @@ final class Passcode {
         guard Self.isValidFormat(newCode) else { throw PasscodeError.invalidFormat }
         var salt = Data(count: 16)
         _ = salt.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, 16, $0.baseAddress!) }
-        let value = Stored(salt: salt, hash: Self.derive(newCode, salt: salt, iterations: Self.iterations), iterations: Self.iterations)
-        try Self.save(value)
+        let value = Stored(salt: salt, hash: Self.derive(newCode, salt: salt, iterations: iterations), iterations: iterations)
+        try store.write(try JSONEncoder().encode(value))
         stored = value
         loadState = .loaded
-        UserDefaults.standard.set(newCode.count, forKey: "passcodeLength")
+        defaults.set(newCode.count, forKey: "passcodeLength")
     }
 
     private static func derive(_ code: String, salt: Data, iterations: UInt32) -> Data {
@@ -133,14 +149,20 @@ final class Passcode {
         guard a.count == b.count else { return false }
         return zip(a, b).reduce(UInt8(0)) { $0 | ($1.0 ^ $1.1) } == 0
     }
+}
 
-    private static func baseQuery() -> [String: Any] {
+/// The real store: a generic password in the login keychain.
+struct KeychainPasscodeStore: PasscodeStore {
+    private static let service = "com.mostperfectsip.toriechan.passcode"
+    private static let account = "owner"
+
+    private func baseQuery() -> [String: Any] {
         [kSecClass as String: kSecClassGenericPassword,
-         kSecAttrService as String: service,
-         kSecAttrAccount as String: account]
+         kSecAttrService as String: Self.service,
+         kSecAttrAccount as String: Self.account]
     }
 
-    private static func read(interactive: Bool) -> Result<Stored?, PasscodeError> {
+    func read(interactive: Bool) -> Result<Data?, PasscodeError> {
         var query = baseQuery()
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
@@ -152,18 +174,13 @@ final class Passcode {
         var result: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
         switch status {
-        case errSecSuccess:
-            guard let data = result as? Data else { return .success(nil) }
-            return .success(try? JSONDecoder().decode(Stored.self, from: data))
-        case errSecItemNotFound:
-            return .success(nil)
-        default:
-            return .failure(.keychain(status))
+        case errSecSuccess: return .success(result as? Data)
+        case errSecItemNotFound: return .success(nil)
+        default: return .failure(.keychain(status))
         }
     }
 
-    private static func save(_ value: Stored) throws {
-        let data = try JSONEncoder().encode(value)
+    func write(_ data: Data) throws {
         let status = SecItemUpdate(baseQuery() as CFDictionary, [kSecValueData as String: data] as CFDictionary)
         if status == errSecItemNotFound {
             var add = baseQuery()
