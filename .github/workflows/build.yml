@@ -1,17 +1,16 @@
 name: Build
 
-# Every push / PR: run the tests and build the app.
-# Tags like v1.2.0: also package a disk image and publish it as a GitHub Release.
+# Every push and pull request: run the tests (with a coverage summary) and build an unsigned app.
+# Tags like v1.2.0: build, sign with Developer ID, notarize, and publish a GitHub Release.
 #
-# Signing is optional. With these repository secrets the build is Developer ID signed and
-# notarized (opens cleanly on any Mac, lid-close protection works):
+# Signing secrets live in the "release" environment, which only v* tags can deploy to, so no
+# branch or pull request workflow can read them. Environment secrets:
 #   DEVELOPER_ID_P12           base64 of the exported "Developer ID Application" certificate (.p12)
 #   DEVELOPER_ID_P12_PASSWORD  password used when exporting the .p12
 #   NOTARY_KEY_P8              base64 of an App Store Connect API key (.p8) with Developer access
 #   NOTARY_KEY_ID              that key's ID
 #   NOTARY_ISSUER              the issuer ID shown on the App Store Connect keys page
-# Without them the build is ad-hoc signed: it runs (via Privacy & Security > Open Anyway), but
-# lid-close protection is unavailable.
+# Without them a tagged build still publishes, ad-hoc signed and labeled unsigned.
 
 on:
   push:
@@ -21,7 +20,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: build-${{ github.ref }}
@@ -29,12 +28,12 @@ concurrency:
 
 jobs:
   build:
+    name: Test & build
     runs-on: macos-15
-    env:
-      HAS_SIGNING: ${{ secrets.DEVELOPER_ID_P12 != '' }}
-      HAS_NOTARY: ${{ secrets.NOTARY_KEY_P8 != '' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
       - name: Use the newest Xcode on the runner
         run: |
@@ -44,7 +43,33 @@ jobs:
           swift --version
 
       - name: Test
-        run: swift test
+        run: swift test --enable-code-coverage
+
+      - name: Coverage summary
+        if: always()
+        run: python3 scripts/coverage-summary.py "$(swift test --show-codecov-path)" >> "$GITHUB_STEP_SUMMARY" || true
+
+      - name: Build app (unsigned)
+        run: SIGN_IDENTITY=- scripts/build-app.sh
+
+  release:
+    name: Sign, notarize & release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: macos-15
+    environment: release
+    permissions:
+      contents: write # publish the GitHub Release
+    env:
+      HAS_SIGNING: ${{ secrets.DEVELOPER_ID_P12 != '' }}
+      HAS_NOTARY: ${{ secrets.NOTARY_KEY_P8 != '' }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Use the newest Xcode on the runner
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
 
       - name: Import Developer ID certificate
         if: env.HAS_SIGNING == 'true'
@@ -69,24 +94,25 @@ jobs:
         if: env.HAS_SIGNING == 'true' && env.HAS_NOTARY == 'true'
         env:
           KEY: ${{ secrets.NOTARY_KEY_P8 }}
+          KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          ISSUER: ${{ secrets.NOTARY_ISSUER }}
         run: |
           echo "$KEY" | base64 --decode > "$RUNNER_TEMP/notary.p8"
-          echo "NOTARY_KEY_PATH=$RUNNER_TEMP/notary.p8" >> "$GITHUB_ENV"
-          echo "NOTARY_KEY_ID=${{ secrets.NOTARY_KEY_ID }}" >> "$GITHUB_ENV"
-          echo "NOTARY_ISSUER=${{ secrets.NOTARY_ISSUER }}" >> "$GITHUB_ENV"
+          {
+            echo "NOTARY_KEY_PATH=$RUNNER_TEMP/notary.p8"
+            echo "NOTARY_KEY_ID=$KEY_ID"
+            echo "NOTARY_ISSUER=$ISSUER"
+          } >> "$GITHUB_ENV"
 
       - name: Version
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
-          fi
+          echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
           echo "BUILD_NUMBER=$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
 
       - name: Build app
         run: |
           [[ -n "${SIGN_IDENTITY:-}" ]] || export SIGN_IDENTITY=-
           scripts/build-app.sh
-          codesign -dv "build/Torie-chan.app" 2>&1 | grep -E "Authority|TeamIdentifier|Signature" || true
 
       - name: Disk image
         run: scripts/make-dmg.sh
@@ -95,15 +121,14 @@ jobs:
         if: env.HAS_SIGNING == 'true' && env.HAS_NOTARY == 'true'
         run: spctl --assess --type execute --verbose "build/Torie-chan.app"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: Torie-chan-${{ github.run_number }}
+          name: Torie-chan-${{ github.ref_name }}
           path: |
             build/Torie-chan-*.dmg
             build/Torie-chan-*.dmg.sha256
 
       - name: Publish release
-        if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

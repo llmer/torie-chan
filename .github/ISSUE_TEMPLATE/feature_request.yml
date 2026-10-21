@@ -1,0 +1,15 @@
+name: Feature request
+description: An idea for Torie-chan
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What would you like Torie-chan to do?
+      description: Describe the situation and what you'd want to happen.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Anything you've tried or considered?
