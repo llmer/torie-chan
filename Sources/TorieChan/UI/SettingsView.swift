@@ -321,11 +321,11 @@ private struct OverviewPage: View {
             Step(id: "code", title: "Unlock your disarm code", detail: "macOS needs your permission to read it from the keychain.",
                  done: false, tier: .required, section: .security)
         case .notSet:
-            Step(id: "code", title: "Set a disarm code", detail: "\(Passcode.minLength)–12 digits. Touch ID works too.",
+            Step(id: "code", title: "Set a disarm code", detail: "\(Passcode.minLength)–12 digits. Touch ID and Apple Watch work too.",
                  done: false, tier: .required, section: .security)
         case .loaded:
             Step(id: "code", title: "Set a disarm code",
-                 detail: p.isShort ? "Works, but \(Passcode.minLength)+ digits is safer." : "Touch ID works too.",
+                 detail: p.isShort ? "Works, but \(Passcode.minLength)+ digits is safer." : "Touch ID and Apple Watch work too.",
                  done: true, tier: .required, section: .security)
         }
         return [
@@ -562,6 +562,9 @@ private struct SecurityPage: View {
 
             Card(title: "How disarming works") {
                 CardRow(symbol: "touchid", tint: .pink, title: "Touch ID", subtitle: "Shown right on the guard screen; no system pop-up.")
+                RowDivider()
+                CardRow(symbol: "applewatch", tint: .orange, title: "Apple Watch",
+                        subtitle: "Double-click the side button to approve. Only works with your unlocked Watch right next to the Mac. Turn it on in System Settings > Touch ID & Password.")
                 RowDivider()
                 CardRow(symbol: "number", tint: .blue, title: "Code",
                         subtitle: "\(Passcode.freeAttempts) free tries, then lockouts of 10 s, 20 s, 40 s and up that survive a relaunch. Guessing sets off the alarm.")
