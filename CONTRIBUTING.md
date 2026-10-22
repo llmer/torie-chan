@@ -135,7 +135,17 @@ git tag v0.2.0 && git push origin v0.2.0
 ```
 
 Use semantic versioning: `feat` bumps the minor version, `fix` bumps the patch, and a breaking change
-bumps the major (or the minor while we're below 1.0). Signing secrets are listed in the README.
+bumps the major (or the minor while we're below 1.0). The signing secrets are listed at the top of
+`.github/workflows/build.yml`.
+
+The release also publishes `appcast.xml`, which existing installs use to update themselves (Sparkle).
+
+**Homebrew.** The cask lives in `packaging/homebrew/torie-chan.rb` and is published in the
+`llmer/homebrew-tap` repository. After a release, point it at the new disk image and copy it over:
+
+```sh
+scripts/update-cask.sh 0.2.0 "$(gh release download v0.2.0 -p '*.sha256' -O - | cut -d' ' -f1)"
+```
 
 ## License
 
