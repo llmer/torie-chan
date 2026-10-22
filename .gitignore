@@ -1,5 +1,61 @@
+# Build output
 .build/
 build/
+DerivedData/
+*.xcarchive
+*.dmg
+*.dmg.sha256
+appcast.xml
+*.profraw
+*.profdata
+
+# SwiftPM and Xcode user state
 .swiftpm/
 *.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+*.xcworkspace/xcuserdata/
+xcuserdata/
+*.xcuserstate
+
+# Secrets: environment files, signing certificates and keys. Signing secrets live in the GitHub
+# "release" environment; never commit them.
+.env
+.env.*
+!.env.example
+*.env
+.envrc
+*.p12
+*.p8
+*.pem
+*.key
+*.cer
+*.certSigningRequest
+*.mobileprovision
+*.provisionprofile
+*.keychain
+*.keychain-db
+AuthKey_*.p8
+notary*.json
+sparkle*key*
+
+# macOS
 .DS_Store
+.AppleDouble
+.LSOverride
+._*
+Icon?
+.Spotlight-V100
+.Trashes
+
+# Editors and tools
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.claude/settings.local.json
+
+# Logs and scratch
+*.log
+*.tmp
+tmp/
