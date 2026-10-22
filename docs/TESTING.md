@@ -62,6 +62,12 @@ first, and save the loud tests for the end.
 - [ ] Send Test Message reaches your iPhone; note whether it buzzed when sent to your own number
 - [ ] With "Include the alarm photo" on, an alarm sends the photo; with it off, only text
 
+### Updates
+
+- [ ] After a new release is published, an older install offers it (Settings > Overview > Updates >
+      Check Now), installs it and relaunches; About shows the new version
+- [ ] While armed, Check for Updates is disabled and no update window appears
+
 ### AI agents
 
 - [ ] `claude mcp add torie-chan -- "/Applications/Torie-chan.app/Contents/MacOS/bg-mcp"`, then

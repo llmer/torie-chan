@@ -387,3 +387,16 @@ final class EventLogTests: XCTestCase {
         XCTAssertTrue(log.recent(limit: 50, since: cutoff).allSatisfy { $0.date > cutoff })
     }
 }
+
+// MARK: - Updates
+
+final class UpdaterPolicyTests: XCTestCase {
+    func testNoUpdateChecksWhileGuarding() {
+        XCTAssertThrowsError(try Updater.mayCheck(guarding: true))
+        XCTAssertNoThrow(try Updater.mayCheck(guarding: false))
+    }
+
+    func testOnlyARealAppBundleUpdatesItself() {
+        XCTAssertFalse(Updater.isAvailable, "the test runner isn't Torie-chan.app")
+    }
+}

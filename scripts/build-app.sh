@@ -36,6 +36,10 @@ cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 [[ -n "${VERSION:-}" ]] && /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP/Contents/Info.plist"
 [[ -n "${BUILD_NUMBER:-}" ]] && /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" "$APP/Contents/Info.plist"
 cp "$BIN/TorieChan" "$BIN/bg-mcp" "$BIN/bg-helper" "$APP/Contents/MacOS/"
+# Sparkle (auto-updates). Torie-chan isn't sandboxed, so Sparkle's XPC services aren't used: leave them out.
+mkdir -p "$APP/Contents/Frameworks"
+ditto "$BIN/Sparkle.framework" "$APP/Contents/Frameworks/Sparkle.framework"
+rm -rf "$APP/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices" "$APP/Contents/Frameworks/Sparkle.framework/XPCServices"
 cp "Resources/$HELPER_LABEL.plist" "$APP/Contents/Library/LaunchDaemons/"
 
 echo "==> signing with: $SIGN_IDENTITY"
@@ -45,6 +49,11 @@ if [[ "$SIGN_IDENTITY" == Developer\ ID* ]]; then
 elif [[ "$SIGN_IDENTITY" != "-" ]]; then
     SIGN_ARGS+=(--options runtime --timestamp=none)   # local development builds
 fi
+# Inside out: Sparkle's helpers, then the framework, then our executables, then the app.
+SPARKLE="$APP/Contents/Frameworks/Sparkle.framework"
+codesign "${SIGN_ARGS[@]}" "$SPARKLE/Versions/B/Autoupdate"
+codesign "${SIGN_ARGS[@]}" "$SPARKLE/Versions/B/Updater.app"
+codesign "${SIGN_ARGS[@]}" "$SPARKLE"
 codesign "${SIGN_ARGS[@]}" --identifier "$HELPER_LABEL" "$APP/Contents/MacOS/bg-helper"
 codesign "${SIGN_ARGS[@]}" --identifier "com.mostperfectsip.toriechan.mcp" "$APP/Contents/MacOS/bg-mcp"
 codesign "${SIGN_ARGS[@]}" --entitlements Resources/TorieChan.entitlements "$APP"

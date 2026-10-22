@@ -8,6 +8,7 @@ private let log = Logger(subsystem: GuardIDs.appBundleID, category: "app")
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDelegate {
     private var guardian: GuardController!
+    private var updater: Updater!
     private let kiosk = KioskController()
     private var server: ControlServer?
     private var statusItem: NSStatusItem!
@@ -21,6 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         try? FileManager.default.createDirectory(at: GuardIDs.supportDirectory, withIntermediateDirectories: true,
                                                  attributes: [.posixPermissions: 0o700])
         guardian = GuardController()
+        updater = Updater { [weak self] in self?.guardian.phase.isGuarding ?? false }
         buildMainMenu()
         guardian.onPhaseChange = { [weak self] phase in self?.phaseChanged(phase) }
         guardian.onNeedsSetup = { [weak self] in self?.openSettings(.overview) }
@@ -95,6 +97,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         }
         menu.removeAllItems()
         let armed = guardian.phase.isGuarding
+        if let version = updater.availableVersion, !armed {
+            let update = NSMenuItem(title: "Update to Torie-chan \(version)…", action: #selector(checkForUpdates), keyEquivalent: "")
+            update.image = NSImage(systemSymbolName: "arrow.down.circle.fill", accessibilityDescription: nil)
+            menu.addItem(update)
+            menu.addItem(.separator())
+        }
         let arm = NSMenuItem(title: "Arm Guard (10s countdown)", action: #selector(armFromMenu), keyEquivalent: "")
         arm.isEnabled = !armed
         menu.addItem(arm)
@@ -103,6 +111,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         dev.keyEquivalentModifierMask = [.command, .option]
         dev.isEnabled = !armed
         menu.addItem(dev)
+        if Updater.isAvailable {
+            let check = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
+            check.isEnabled = !armed
+            menu.addItem(check)
+        }
         menu.addItem(.separator())
         let quit = NSMenuItem(title: "Quit Torie-chan", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         quit.isEnabled = !armed
@@ -114,6 +127,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         guard !guardian.phase.isGuarding else { return }
         guardian.stopMotionTest()
         openSettings(.developer)
+    }
+
+    @objc private func checkForUpdates() {
+        updater.checkForUpdates()
     }
 
     @objc private func armFromMenu() {
@@ -140,7 +157,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             window.titleVisibility = .hidden
             window.isReleasedWhenClosed = false
             window.contentMinSize = NSSize(width: 860, height: 560)
-            window.contentView = NSHostingView(rootView: SettingsView(guardian: guardian, nav: settingsNav, devTools: devTools))
+            window.contentView = NSHostingView(rootView: SettingsView(guardian: guardian, nav: settingsNav, devTools: devTools, updater: updater))
             window.delegate = self
             window.center()
             window.setFrameAutosaveName("TorieChanSettings")
@@ -243,6 +260,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         let appItem = NSMenuItem()
         let appMenu = NSMenu()
         appMenu.addItem(withTitle: "About Torie-chan", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        if Updater.isAvailable {
+            appMenu.addItem(withTitle: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "").target = self
+        }
         appMenu.addItem(.separator())
         let settings = appMenu.addItem(withTitle: "Settings…", action: #selector(showSettings), keyEquivalent: ",")
         settings.target = self
@@ -321,6 +341,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         if phase == .disarmed {
             kiosk.hide()
             updateActivationPolicy()
+            updater.guardEnded()
         } else {
             settingsWindow?.orderOut(nil)
             kiosk.show(guardian)

@@ -25,6 +25,7 @@ The interesting trust boundaries:
 | Control socket `~/Library/Application Support/Torie-chan/control.sock` | Local processes of the same user (socket is `0600` in a `0700` folder) | Commands: arm, status, events, last session, post update. **There is no disarm.** |
 | `bg-mcp` (MCP server for AI agents) | Whatever agent the user connects | Can arm and read; can't disarm; never returns alarm photo paths; agent text is sanitized and length-capped |
 | iMessage alerts | Messages.app via `osascript` | Recipient, text and photo path are passed as arguments after `--`, never spliced into the script; the recipient must look like a phone number or email |
+| Auto-updates (Sparkle) | `appcast.xml` on the latest GitHub release, over HTTPS | An update installs only if it's signed with our EdDSA key (`SUPublicEDKey`) **and** by the same Developer ID team. Never checks, prompts or relaunches while guarding |
 | Disarm code | Keychain (PBKDF2-SHA256, 200k iterations) | 3 free tries, then lockouts that escalate and survive relaunch; guessing sounds the alarm |
 
 Especially interesting: anything that disarms the guard or silences the siren without the code or
