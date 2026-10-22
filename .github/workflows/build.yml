@@ -52,6 +52,12 @@ jobs:
       - name: Build app (unsigned)
         run: SIGN_IDENTITY=- scripts/build-app.sh
 
+      # The release job draws the disk image background with this; catch a broken build before tagging.
+      - name: Build icon and disk image renderer
+        run: |
+          scripts/build-icon-tool.sh
+          build/make-icon "$RUNNER_TEMP/dmg-bg.png" dmg
+
   release:
     name: Sign, notarize & release
     if: startsWith(github.ref, 'refs/tags/v')
@@ -68,6 +74,13 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+
+      - name: Require signing and notarization secrets
+        run: |
+          if [[ "$HAS_SIGNING" != true || "$HAS_NOTARY" != true ]]; then
+            echo "::error::Signing or notarization secrets are missing from the release environment; refusing to publish an unsigned release."
+            exit 1
+          fi
 
       - name: Only release commits that are on main
         run: |

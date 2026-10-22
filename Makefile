@@ -31,8 +31,7 @@ clean:
 # Regenerate Resources/AppIcon.icns from the app's own eye renderer.
 icon:
 	mkdir -p build/AppIcon.iconset
-	swiftc -O -swift-version 5 Sources/TorieChan/UI/EyesView.swift Sources/TorieChan/UI/EyesModel.swift \
-	  Sources/TorieChan/Sensors/PersonTracker.swift scripts/icon/main.swift -o build/make-icon
+	scripts/build-icon-tool.sh
 	build/make-icon build/icon-1024.png
 	for s in 16 32 128 256 512; do \
 	  sips -z $$s $$s build/icon-1024.png --out build/AppIcon.iconset/icon_$${s}x$${s}.png >/dev/null; \

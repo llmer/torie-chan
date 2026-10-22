@@ -29,10 +29,7 @@ ln -s /Applications "$STAGING/Applications"
 
 # Window background, drawn by the same renderer as the app icon (1x + 2x in one TIFF).
 mkdir -p "$STAGING/.background"
-if [[ ! -x build/make-icon || scripts/icon/main.swift -nt build/make-icon ]]; then
-    swiftc -O -swift-version 5 Sources/TorieChan/UI/EyesView.swift Sources/TorieChan/UI/EyesModel.swift \
-        Sources/TorieChan/Sensors/PersonTracker.swift scripts/icon/main.swift -o build/make-icon
-fi
+scripts/build-icon-tool.sh
 build/make-icon "$STAGING/bg.png" dmg
 build/make-icon "$STAGING/bg@2x.png" dmg@2x
 tiffutil -cathidpicheck "$STAGING/bg.png" "$STAGING/bg@2x.png" -out "$STAGING/.background/background.tiff" 2>/dev/null
