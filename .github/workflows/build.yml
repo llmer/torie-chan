@@ -10,7 +10,9 @@ name: Build
 #   NOTARY_KEY_P8              base64 of an App Store Connect API key (.p8) with Developer access
 #   NOTARY_KEY_ID              that key's ID
 #   NOTARY_ISSUER              the issuer ID shown on the App Store Connect keys page
-# Without them a tagged build still publishes, ad-hoc signed and labeled unsigned.
+#   SPARKLE_ED_PRIVATE_KEY     Sparkle EdDSA key that signs updates (generate_keys -x); its public half is
+#                              SUPublicEDKey in Info.plist. Losing it means existing installs can't update.
+# A tag release fails without them rather than publishing an unsigned build.
 
 on:
   push:
@@ -69,6 +71,9 @@ jobs:
     env:
       HAS_SIGNING: ${{ secrets.DEVELOPER_ID_P12 != '' }}
       HAS_NOTARY: ${{ secrets.NOTARY_KEY_P8 != '' }}
+      HAS_SPARKLE: ${{ secrets.SPARKLE_ED_PRIVATE_KEY != '' }}
+      SPARKLE_VERSION: "2.10.0" # keep in step with Package.swift
+      SPARKLE_SHA256: c2bf58aa8387266ac179357b1415d6f2635f044da8be41042af32425dae6da0c
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -77,8 +82,8 @@ jobs:
 
       - name: Require signing and notarization secrets
         run: |
-          if [[ "$HAS_SIGNING" != true || "$HAS_NOTARY" != true ]]; then
-            echo "::error::Signing or notarization secrets are missing from the release environment; refusing to publish an unsigned release."
+          if [[ "$HAS_SIGNING" != true || "$HAS_NOTARY" != true || "$HAS_SPARKLE" != true ]]; then
+            echo "::error::Signing, notarization or update-signing secrets are missing from the release environment; refusing to publish."
             exit 1
           fi
 
@@ -142,12 +147,32 @@ jobs:
         if: env.HAS_SIGNING == 'true' && env.HAS_NOTARY == 'true'
         run: spctl --assess --type execute --verbose "build/Torie-chan.app"
 
+      - name: Sparkle tools
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/sparkle.tar.xz" \
+            "https://github.com/sparkle-project/Sparkle/releases/download/$SPARKLE_VERSION/Sparkle-$SPARKLE_VERSION.tar.xz"
+          echo "$SPARKLE_SHA256  $RUNNER_TEMP/sparkle.tar.xz" | shasum -a 256 -c -
+          mkdir -p "$RUNNER_TEMP/sparkle"
+          tar -xJf "$RUNNER_TEMP/sparkle.tar.xz" -C "$RUNNER_TEMP/sparkle" bin
+          echo "SPARKLE_BIN=$RUNNER_TEMP/sparkle/bin" >> "$GITHUB_ENV"
+
+      # After notarization: stapling changes the disk image, and the signature must cover the final bytes.
+      - name: Update feed
+        env:
+          SPARKLE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: |
+          umask 077
+          printf '%s' "$SPARKLE_KEY" > "$RUNNER_TEMP/sparkle.key"
+          SPARKLE_KEY_FILE="$RUNNER_TEMP/sparkle.key" scripts/make-appcast.sh build/Torie-chan-"$VERSION".dmg
+          rm -f "$RUNNER_TEMP/sparkle.key"
+
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: Torie-chan-${{ github.ref_name }}
           path: |
             build/Torie-chan-*.dmg
             build/Torie-chan-*.dmg.sha256
+            build/appcast.xml
 
       - name: Publish release
         env:
@@ -159,5 +184,5 @@ jobs:
             NOTE="**Unsigned build.** macOS will block it at first: open it once, then go to System Settings > Privacy & Security and click Open Anyway. Lid-close protection needs a signed build."
           fi
           printf '%s\n\nRequires an Apple Silicon Mac running macOS 14 or later.\n' "$NOTE" > "$RUNNER_TEMP/notes.md"
-          gh release create "$GITHUB_REF_NAME" build/Torie-chan-*.dmg build/Torie-chan-*.dmg.sha256 \
+          gh release create "$GITHUB_REF_NAME" build/Torie-chan-*.dmg build/Torie-chan-*.dmg.sha256 build/appcast.xml \
             --title "Torie-chan ${GITHUB_REF_NAME#v}" --notes-file "$RUNNER_TEMP/notes.md" --generate-notes

@@ -78,6 +78,9 @@ When you close the lid, Torie-chan ducks under it like she's peeking out from un
   <img src="docs/images/lid.png" width="760" alt="Filmstrip: as the lid closes a dark edge comes down and the eyes duck under it, then peek back out and pop up with sparkles as it opens">
 </p>
 
+Torie-chan updates herself: she checks once a day and asks before installing (Settings > Overview >
+Updates). Updates are signed, and she never updates while she's guarding.
+
 ### Building from source
 
 ```sh

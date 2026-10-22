@@ -136,6 +136,7 @@ struct SettingsView: View {
     @ObservedObject var guardian: GuardController
     @ObservedObject var nav: SettingsNavigation
     let devTools: DevToolsHost
+    @ObservedObject var updater: Updater
     @StateObject private var status = SystemStatus()
 
     var body: some View {
@@ -172,7 +173,7 @@ struct SettingsView: View {
 
     @ViewBuilder private var page: some View {
         switch nav.section {
-        case .overview: OverviewPage(guardian: guardian, nav: nav, status: status)
+        case .overview: OverviewPage(guardian: guardian, nav: nav, status: status, updater: updater)
         case .security: SecurityPage(guardian: guardian)
         case .sensors: SensorsPage(guardian: guardian, status: status)
         case .alerts: AlertsPage(guardian: guardian)
@@ -298,6 +299,7 @@ private struct OverviewPage: View {
     @ObservedObject var guardian: GuardController
     @ObservedObject var nav: SettingsNavigation
     @ObservedObject var status: SystemStatus
+    @ObservedObject var updater: Updater
     @StateObject private var heroEyes = EyesModel()
     @State private var shareCardURL: URL?
 
@@ -364,6 +366,7 @@ private struct OverviewPage: View {
             }
             if let last = guardian.lastSession { lastSessionCard(last) }
             activityCard
+            if Updater.isAvailable { updatesCard }
         }
         .onAppear {
             heroEyes.mood = .calm
@@ -453,6 +456,43 @@ private struct OverviewPage: View {
             }
         }
         .task(id: last.startedAt) { shareCardURL = ShareCard.render(last) }
+    }
+
+    private var updatesCard: some View {
+        Card(title: "Updates") {
+            if let version = updater.availableVersion {
+                CardRow(symbol: "arrow.down.circle.fill", tint: .blue, title: "Torie-chan \(version) is available",
+                        subtitle: "You have \(updater.currentVersion).") {
+                    Button("Install…") { updater.checkForUpdates() }
+                        .controlSize(.small)
+                        .disabled(!updater.canCheck)
+                }
+            } else {
+                CardRow(symbol: "arrow.triangle.2.circlepath", tint: .blue, title: "Torie-chan \(updater.currentVersion)",
+                        subtitle: "Updates are signed and checked before they install. Never while guarding.") {
+                    Button("Check Now") { updater.checkForUpdates() }
+                        .controlSize(.small)
+                        .disabled(!updater.canCheck)
+                }
+            }
+            RowDivider()
+            CardRow(symbol: "clock.arrow.circlepath", tint: .teal, title: "Check automatically",
+                    subtitle: "Once a day, while Torie-chan isn't guarding.") {
+                Toggle("Check automatically", isOn: Binding(get: { updater.checksAutomatically },
+                                                            set: { updater.checksAutomatically = $0 }))
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+            }
+            RowDivider()
+            CardRow(symbol: "arrow.down.app.fill", tint: .indigo, title: "Install automatically",
+                    subtitle: "Downloads in the background and installs the next time you quit.") {
+                Toggle("Install automatically", isOn: Binding(get: { updater.installsAutomatically },
+                                                              set: { updater.installsAutomatically = $0 }))
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .disabled(!updater.checksAutomatically)
+            }
+        }
     }
 
     private var activityCard: some View {

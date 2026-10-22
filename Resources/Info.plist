@@ -28,6 +28,12 @@
 	<true/>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>SUFeedURL</key>
+	<string>https://github.com/llmer/torie-chan/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>EF+4uwdDYnMBe28+q6CFJ9x8mrVWB6pn8p4lVyAarYg=</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>Torie-chan watches who walks past your laptop while it's armed. Video is processed on-device and never stored, except a single photo if the alarm goes off.</string>
 	<key>NSAppleEventsUsageDescription</key>
