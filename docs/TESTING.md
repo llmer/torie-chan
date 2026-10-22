@@ -51,6 +51,9 @@ first, and save the loud tests for the end.
 
 - [ ] Correct code disarms; the welcome-back screen shows the debrief
 - [ ] Touch ID on the guard screen disarms (no system pop-up appears)
+- [ ] With "Use Apple Watch to unlock" on: the keypad says "or use Touch ID or your Apple Watch", the Watch
+      asks to approve, double-clicking its side button disarms, and nothing pops up over the guard screen
+- [ ] Walking away with the Watch (out of Bluetooth range) means it can no longer approve
 - [ ] Three wrong codes lock the keypad and sound the alarm; the lockout survives quitting and relaunching
 - [ ] After disarming, closing the lid puts the Mac to sleep normally (lid-close sleep was restored)
 - [ ] Force-quitting Torie-chan while armed (Activity Monitor) relaunches it straight into the alarm,

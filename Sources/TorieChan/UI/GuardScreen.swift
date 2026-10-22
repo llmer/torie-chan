@@ -304,11 +304,19 @@ struct KeypadView: View {
                 }
             }
 
-            if let context = guardian.authContext {
+            if let context = guardian.authContext, let options = guardian.biometrics {
                 HStack(spacing: 10) {
-                    TouchIDView(context: context)
-                        .frame(width: 32, height: 32)
-                    Text("or use Touch ID")
+                    if options.touchID {
+                        TouchIDView(context: context)
+                            .frame(width: 32, height: 32)
+                    } else {
+                        Image(systemName: "applewatch")
+                            .font(.system(size: 22))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 32, height: 32)
+                            .accessibilityHidden(true)
+                    }
+                    Text(options.prompt)
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(.secondary)
                 }

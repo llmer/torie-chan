@@ -1,4 +1,5 @@
 import CoreGraphics
+import LocalAuthentication
 import XCTest
 @testable import GuardShared
 @testable import TorieChan
@@ -398,5 +399,25 @@ final class UpdaterPolicyTests: XCTestCase {
 
     func testOnlyARealAppBundleUpdatesItself() {
         XCTAssertFalse(Updater.isAvailable, "the test runner isn't Torie-chan.app")
+    }
+}
+
+// MARK: - Touch ID and Apple Watch
+
+final class BiometricDisarmTests: XCTestCase {
+    typealias Options = GuardController.BiometricOptions
+
+    func testTheKeypadSaysWhatThisMacOffers() {
+        XCTAssertEqual(Options(touchID: true, watch: false).prompt, "or use Touch ID")
+        XCTAssertEqual(Options(touchID: false, watch: true).prompt, "or approve on your Apple Watch")
+        XCTAssertEqual(Options(touchID: true, watch: true).prompt, "or use Touch ID or your Apple Watch")
+        XCTAssertTrue(Options(touchID: false, watch: false).isEmpty)
+    }
+
+    func testTheMacPasswordIsNeverAWayToDisarm() {
+        // The plain deviceOwnerAuthentication policies fall back to the login password.
+        let passwordPolicies: [LAPolicy] = [.deviceOwnerAuthentication]
+        XCTAssertFalse(passwordPolicies.contains(GuardController.biometricsOrWatchPolicy))
+        XCTAssertFalse(passwordPolicies.contains(GuardController.watchPolicy))
     }
 }

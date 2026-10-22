@@ -84,6 +84,8 @@ final class GuardController: ObservableObject {
     @Published private(set) var entry = ""
     @Published private(set) var keypadMessage: String?
     @Published private(set) var authContext: LAContext?
+    /// What the keypad offers besides the code, while `authContext` is live.
+    @Published private(set) var biometrics: BiometricOptions?
 
     /// Settings "test motion" mode: live agitation without arming.
     @Published private(set) var motionTestActive = false
@@ -720,6 +722,7 @@ final class GuardController: ObservableObject {
         keypadMessage = nil
         authContext?.invalidate()
         authContext = nil
+        biometrics = nil
     }
 
     func typeDigit(_ d: Character) {
@@ -765,20 +768,58 @@ final class GuardController: ObservableObject {
         passcode.lockedUntil.map { Int($0.timeIntervalSince(now).rounded(.up)) }
     }
 
+    /// Disarming without the code: Touch ID, or approving on the owner's Apple Watch, which macOS only
+    /// allows when the Watch is unlocked, on their wrist and right next to the Mac. Never the Mac's
+    /// password: the keypad code stays the only thing anyone can type.
+    struct BiometricOptions: Equatable {
+        var touchID: Bool
+        var watch: Bool
+
+        var isEmpty: Bool { !touchID && !watch }
+
+        var prompt: String {
+            switch (touchID, watch) {
+            case (true, true): "or use Touch ID or your Apple Watch"
+            case (false, true): "or approve on your Apple Watch"
+            default: "or use Touch ID"
+            }
+        }
+
+        /// How a successful disarm is recorded (macOS doesn't say which one was used).
+        var method: String {
+            switch (touchID, watch) {
+            case (true, true): "Touch ID or Apple Watch"
+            case (false, true): "Apple Watch"
+            default: "Touch ID"
+            }
+        }
+    }
+
+    nonisolated static var watchPolicy: LAPolicy {
+        if #available(macOS 15, *) { .deviceOwnerAuthenticationWithCompanion } else { .deviceOwnerAuthenticationWithWatch }
+    }
+
+    nonisolated static var biometricsOrWatchPolicy: LAPolicy {
+        if #available(macOS 15, *) { .deviceOwnerAuthenticationWithBiometricsOrCompanion } else { .deviceOwnerAuthenticationWithBiometricsOrWatch }
+    }
+
     private func startTouchID() {
         let context = LAContext()
         context.localizedFallbackTitle = ""
-        var error: NSError?
-        guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) else { return }
+        let options = BiometricOptions(touchID: context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: nil),
+                                       watch: context.canEvaluatePolicy(Self.watchPolicy, error: nil))
+        guard !options.isEmpty else { return }
         authContext = context
+        biometrics = options
         // The keypad embeds an LAAuthenticationView bound to this context, so no system panel
         // has to appear above our kiosk window.
+        let policy: LAPolicy = options.watch ? Self.biometricsOrWatchPolicy : .deviceOwnerAuthenticationWithBiometrics
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
-            context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: "disarm Torie-chan") { ok, _ in
+            context.evaluatePolicy(policy, localizedReason: "disarm Torie-chan") { ok, _ in
                 DispatchQueue.main.async {
                     guard let self, ok, self.authContext === context else { return }
                     self.passcode.resetFailures()
-                    self.disarm(method: "Touch ID")
+                    self.disarm(method: options.method)
                 }
             }
         }
