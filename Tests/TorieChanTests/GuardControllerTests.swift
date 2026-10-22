@@ -224,6 +224,23 @@ final class GuardControllerTests: XCTestCase {
         XCTAssertTrue(second.alarm.isSounding)
     }
 
+    func testErasingTheArmedMarkerDoesntDisarm() {
+        // The marker was deleted and the app killed; the root helper still has the guard armed.
+        let relaunched = GuardHarness()
+        XCTAssertFalse(relaunched.guardian.armedMarker.exists)
+        relaunched.guardian.helperReportedArmed()
+        XCTAssertEqual(relaunched.phase, "alarm")
+        XCTAssertTrue(relaunched.alarm.isSounding)
+        XCTAssertTrue(relaunched.guardian.events.events.contains { $0.kind == "tamper" })
+    }
+
+    func testTheHelpersAnswerDoesNothingOnceGuarding() {
+        let h = GuardHarness()
+        h.armAndWatch()
+        h.guardian.helperReportedArmed()
+        XCTAssertEqual(h.phase, "armed")
+    }
+
     // MARK: Agents (control socket / MCP requests)
 
     func testAgentsGetAMinimumCountdownAndSanitizedNotes() {

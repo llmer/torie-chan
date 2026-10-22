@@ -14,10 +14,13 @@ import Foundation
     func heartbeat()
     func disarm(reply: @escaping (Bool, String?) -> Void)
     func version(reply: @escaping (String) -> Void)
+    /// Whether the calling user's guard is armed, or waiting for the app to come back after it vanished.
+    /// Read-only. The app asks at launch, so erasing its own armed marker can't make it forget.
+    func guardState(reply: @escaping (Bool) -> Void)
 }
 
 public enum HelperInfo {
-    public static let version = "2"
+    public static let version = "3"
     /// The app sends a heartbeat at least this often while armed.
     public static let heartbeatSeconds: TimeInterval = 5
     /// Helper restores sleep if it hears nothing for this long.

@@ -112,6 +112,25 @@ final class SleepGuard {
         setLid(.failed(reason))
     }
 
+    /// Asks the root helper whether it still has this user's guard armed. False if the helper isn't
+    /// installed, is an older version, or doesn't answer within a few seconds.
+    func helperIsGuarding(_ completion: @escaping (Bool) -> Void) {
+        guard service.status == .enabled else { return completion(false) }
+        let conn = makeConnection()
+        var answered = false
+        let finish: (Bool) -> Void = { armed in
+            DispatchQueue.main.async {
+                guard !answered else { return }
+                answered = true
+                conn.invalidate()
+                completion(armed)
+            }
+        }
+        let proxy = conn.remoteObjectProxyWithErrorHandler { _ in finish(false) } as? GuardHelperProtocol
+        proxy?.guardState { finish($0) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) { finish(false) }
+    }
+
     private func makeConnection() -> NSXPCConnection {
         let c = NSXPCConnection(machServiceName: GuardIDs.helperLabel, options: .privileged)
         c.remoteObjectInterface = NSXPCInterface(with: GuardHelperProtocol.self)

@@ -291,9 +291,20 @@ final class GuardController: ObservableObject {
     func resumeAfterTamper() {
         guard armedMarker.exists else { return }
         events.add("tamper", "Torie-chan was force-quit or crashed while armed")
-        let previousNote = armedMarker.read()?.note
-        if arm(countdown: 2, note: previousNote) == nil {
-            triggerAlarm("Guard app was force-quit while armed")
+        rearmIntoAlarm("Guard app was force-quit while armed", note: armedMarker.read()?.note)
+    }
+
+    /// The root helper still had the guard armed, but the armed marker was gone: someone erased it
+    /// and then killed the app, hoping it would come back disarmed.
+    func helperReportedArmed() {
+        guard !phase.isGuarding else { return }
+        events.add("tamper", "Relaunched while the lid-close helper still had the guard armed; its armed marker had been deleted")
+        rearmIntoAlarm("Guard app was killed while armed", note: nil)
+    }
+
+    private func rearmIntoAlarm(_ reason: String, note: String?) {
+        if arm(countdown: 2, note: note) == nil {
+            triggerAlarm(reason)
         }
     }
 

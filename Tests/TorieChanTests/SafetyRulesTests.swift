@@ -175,6 +175,18 @@ final class HelperLeaseTests: XCTestCase {
         XCTAssertEqual(relaunches, 0)
     }
 
+    func testTheHelperRemembersTheGuardForItsOwnerOnly() {
+        let lease = makeLease()
+        XCTAssertFalse(lease.isGuarding(uid: owner))
+        lease.arm(client: app, uid: owner)
+        lease.disconnected(client: app) // killed: waiting for the relaunch
+        XCTAssertTrue(lease.isGuarding(uid: owner), "still armed while waiting for the app to come back")
+        XCTAssertFalse(lease.isGuarding(uid: 502), "another user's app gets no answer about this guard")
+        lease.arm(client: 2, uid: owner)
+        lease.disarm(client: 2, uid: owner)
+        XCTAssertFalse(lease.isGuarding(uid: owner))
+    }
+
     func testConnectionsThatNeverSpokeDontHoldTheLease() {
         let lease = makeLease()
         lease.arm(client: app, uid: owner)

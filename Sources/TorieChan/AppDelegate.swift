@@ -65,7 +65,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         if guardian.armedMarker.exists {
             // We were killed mid-guard (the helper relaunches us). Come back up screaming.
             guardian.resumeAfterTamper()
-        } else if let dir = Self.argument(after: "--snapshot-settings") {
+            return
+        }
+        // The marker is ours and can be deleted; the helper's state is root's. Ask it too.
+        guardian.sleepGuard.helperIsGuarding { [weak self] armed in
+            if armed { self?.guardian.helperReportedArmed() }
+        }
+        if let dir = Self.argument(after: "--snapshot-settings") {
             snapshotSettings(to: URL(fileURLWithPath: dir))
         } else if CommandLine.arguments.contains("--devtools") {
             openSettings(.developer)

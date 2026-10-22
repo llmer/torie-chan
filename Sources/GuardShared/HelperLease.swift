@@ -72,6 +72,11 @@ public final class HelperLease {
         return actions.setSleepDisabled(false)
     }
 
+    /// Whether `uid`'s guard is armed (including while waiting for a relaunch).
+    public func isGuarding(uid: UInt32) -> Bool {
+        isArmed && ownerUID == uid
+    }
+
     public func disconnected(client: Client) {
         guard clients.remove(client) != nil, clients.isEmpty else { return }
         guard isArmed else {

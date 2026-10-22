@@ -85,6 +85,7 @@ final class Guardian {
     func heartbeat(from service: HelperService) { lease.heartbeat(client: service.client, uid: service.uid) }
     func disarm(from service: HelperService) -> (Bool, String?) { lease.disarm(client: service.client, uid: service.uid) }
     func disconnected(_ client: HelperLease.Client) { lease.disconnected(client: client) }
+    func isGuarding(_ service: HelperService) -> Bool { lease.isGuarding(uid: service.uid) }
 
     private func relaunchApp() {
         guard let uid = lease.ownerUID, uid != 0 else { return }
@@ -142,6 +143,10 @@ final class HelperService: NSObject, GuardHelperProtocol {
 
     func version(reply: @escaping (String) -> Void) {
         reply(HelperInfo.version)
+    }
+
+    func guardState(reply: @escaping (Bool) -> Void) {
+        DispatchQueue.main.async { reply(self.guardian.isGuarding(self)) }
     }
 }
 
