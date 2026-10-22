@@ -48,7 +48,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         menu.delegate = self
         statusItem.menu = menu
 
-        // Housekeeping: drop old alarm photos now and every few hours.
+        // Housekeeping: encrypt any plain alarm photos, drop old ones and leftover iMessage copies.
+        guardian.photos.prepare()
+        guardian.photos.encryptPlainPhotos()
+        guardian.photos.cleanOutgoing()
         SnapshotRetention.prune()
         let t = Timer(timeInterval: 6 * 3600, repeats: true) { _ in SnapshotRetention.prune() }
         RunLoop.main.add(t, forMode: .common)

@@ -159,15 +159,16 @@ There is **no disarm tool**, by design.
 
 - Face *detection* only, at 3–8 fps and 640×480, processed in memory. No face recognition or face templates.
   Owner recognition was considered and rejected (spoofable, and a biometric-law risk).
-- One JPEG per alarm, kept 7 days by default (configurable). It's only sent if you turn on "Include the alarm photo"
-  for iMessage alerts (end-to-end encrypted, off by default). No third-party services.
-- The event log keeps 30 days. Settings › **Delete All Data** wipes everything.
+- One photo per alarm, **encrypted on disk** with a key kept in your keychain, kept 7 days by default (configurable).
+  You view it inside Torie-chan. It's only sent if you turn on "Include the alarm photo" for iMessage alerts
+  (end-to-end encrypted, off by default); that copy is deleted from the Mac after 10 minutes. No third-party services.
+- The event log keeps 30 days. Settings › **Delete All Data** wipes everything, including the photo key.
 - A standing notice on the guard screen tells passers-by what the camera does and doesn't do.
 - Agent-supplied text (notes, updates) is sanitized and length-capped. Agents are told log text is data, not instructions.
 
 ## Files
 
-- `~/Library/Application Support/Torie-chan/`: `events.jsonl`, `last_session.json`, `Snapshots/`, `armed.json` (exists only while armed)
+- `~/Library/Application Support/Torie-chan/`: `events.jsonl`, `last_session.json`, `Snapshots/` (encrypted alarm photos), `armed.json` (exists only while armed)
 - `/var/log/toriechan-helper.log`: helper log
 
 ## Releasing

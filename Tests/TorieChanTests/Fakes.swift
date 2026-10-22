@@ -109,6 +109,25 @@ final class InMemoryPasscodeStore: PasscodeStore {
     func write(_ data: Data) throws { self.data = data }
 }
 
+final class InMemoryPhotoKeyStore: PhotoKeyStore {
+    var privateKeyData: Data?
+    var publicKeyData: Data?
+    var privateKeyReads = 0
+    func publicKey() -> Data? { publicKeyData }
+    func privateKey() throws -> Data? {
+        privateKeyReads += 1
+        return privateKeyData
+    }
+    func create(privateKey: Data, publicKey: Data) throws {
+        privateKeyData = privateKey
+        publicKeyData = publicKey
+    }
+    func delete() {
+        privateKeyData = nil
+        publicKeyData = nil
+    }
+}
+
 /// Messages "sent" by the fake iMessage transport.
 final class Outbox {
     var messages: [[String]] = []
@@ -142,6 +161,7 @@ final class GuardHarness {
     let sleep = FakeSleep()
     let outbox = Outbox()
     let store = InMemoryPasscodeStore()
+    let photoKeys = InMemoryPhotoKeyStore()
     let defaults: UserDefaults
     let directory: URL
     var audio = AudioOutput.Fingerprint(wiredOutputs: ["BuiltInSpeakerDevice"], speakerDataSource: 1)
@@ -167,7 +187,7 @@ final class GuardHarness {
         }
         let env = GuardEnvironment(
             motion: motion, system: system, camera: camera, alarm: alarm, sleep: sleep, notifier: notifier,
-            passcode: passcode, defaults: defaults, dataDirectory: directory, now: { clock.date },
+            passcode: passcode, photoKeys: photoKeys, defaults: defaults, dataDirectory: directory, now: { clock.date },
             audioFingerprint: { [unowned self] in self.audio }, lidAngle: { nil }, motionAvailable: { true },
             cameraAllowed: { [unowned self] in self.cameraAllowed }, feedsLidAngle: false)
         guardian = GuardController(environment: env)
