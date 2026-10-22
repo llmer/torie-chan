@@ -1,6 +1,5 @@
 // Renders Torie-chan's app icon with the app's own eye renderer.
-//   swiftc -O -swift-version 5 Sources/TorieChan/UI/EyesView.swift Sources/TorieChan/UI/EyesModel.swift \
-//     Sources/TorieChan/Sensors/PersonTracker.swift scripts/icon/main.swift -o build/make-icon
+//   scripts/build-icon-tool.sh
 //   build/make-icon <out.png> [close|calm|happy]   (or just: make icon)
 //   build/make-icon <out.png> dmg|dmg@2x            disk image window background
 import AppKit
