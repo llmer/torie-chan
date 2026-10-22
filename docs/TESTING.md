@@ -57,6 +57,10 @@ first, and save the loud tests for the end.
       and the relaunched app runs as you, not root: `ps -o user= -p $(pgrep -x TorieChan)` prints your
       username
 
+- [ ] With lid-close protection installed: while armed, delete
+      `~/Library/Application Support/Torie-chan/armed.json` and force-quit Torie-chan. It still comes back
+      into the alarm (the helper remembers)
+
 ### Alerts
 
 - [ ] Send Test Message reaches your iPhone; note whether it buzzed when sent to your own number
