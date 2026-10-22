@@ -68,6 +68,9 @@ first, and save the loud tests for the end.
 
 - [ ] Send Test Message reaches your iPhone; note whether it buzzed when sent to your own number
 - [ ] With "Include the alarm photo" on, an alarm sends the photo; with it off, only text
+- [ ] The alarm photo opens from the event log's Photo button inside Torie-chan; the file in
+      `~/Library/Application Support/Torie-chan/Snapshots/` is not a viewable image; Save a Copy works
+- [ ] After updating from a version before encryption, older alarm photos are encrypted and still open
 
 ### Updates
 

@@ -504,7 +504,7 @@ private struct OverviewPage: View {
             }
             ForEach(Array(recent.enumerated()), id: \.element.rowID) { index, event in
                 if index > 0 { RowDivider() }
-                EventRow(event: event)
+                EventRow(event: event, photos: guardian.photos)
             }
         }
     }
@@ -1005,7 +1005,7 @@ private struct DataPage: View {
                 }
                 ForEach(Array(events.enumerated()), id: \.element.rowID) { index, event in
                     if index > 0 { RowDivider() }
-                    EventRow(event: event)
+                    EventRow(event: event, photos: guardian.photos)
                 }
             }
         }
@@ -1199,6 +1199,51 @@ private struct CardRow<Trailing: View>: View {
 }
 
 /// Inset dividers line up with row text; use inset 0 around non-row blocks.
+private struct AlarmPhoto: Identifiable {
+    let id: String
+    let jpeg: Data
+    let date: Date
+}
+
+private struct AlarmPhotoView: View {
+    let photo: AlarmPhoto
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Alarm photo, \(photo.date.formatted(date: .abbreviated, time: .shortened))")
+                .font(.headline)
+            if let image = NSImage(data: photo.jpeg) {
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: 640, maxHeight: 480)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .accessibilityLabel("Photo taken when the alarm went off")
+            }
+            HStack {
+                Text("Stored encrypted on this Mac.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Save a Copy…", action: saveCopy)
+                Button("Done") { dismiss() }
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(20)
+        .frame(minWidth: 420)
+    }
+
+    private func saveCopy() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.jpeg]
+        panel.nameFieldStringValue = "Torie-chan alarm \(photo.date.formatted(.iso8601.year().month().day())).jpg"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        try? photo.jpeg.write(to: url, options: .atomic)
+    }
+}
+
 private struct RowDivider: View {
     var inset: CGFloat = 56
     var body: some View { Divider().padding(.leading, inset) }
@@ -1284,15 +1329,30 @@ extension GuardEvent {
 
 private struct EventRow: View {
     let event: GuardEvent
+    let photos: PhotoVault
+    @State private var shown: AlarmPhoto?
+    @State private var failed = false
 
     var body: some View {
         CardRow(symbol: symbol, tint: tint, plainIcon: true, title: event.message,
                 subtitle: event.date.formatted(.dateTime.month(.abbreviated).day().hour().minute())) {
             if let path = event.snapshotPath {
-                Button("Photo") { NSWorkspace.shared.open(URL(fileURLWithPath: path)) }.controlSize(.small)
+                Button("Photo") { show(path) }.controlSize(.small)
             }
         }
         .help(event.message)
+        .sheet(item: $shown) { AlarmPhotoView(photo: $0) }
+        .alert("Couldn't open the photo", isPresented: $failed) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("It may have been deleted, or macOS didn't allow access to the key that unlocks it.")
+        }
+    }
+
+    /// Decrypted in memory; nothing unencrypted is written to disk just to look at it.
+    private func show(_ path: String) {
+        guard let data = try? photos.load(path), NSImage(data: data) != nil else { return failed = true }
+        shown = AlarmPhoto(id: path, jpeg: data, date: event.date)
     }
 
     private var symbol: String {

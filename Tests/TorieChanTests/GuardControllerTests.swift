@@ -103,6 +103,28 @@ final class GuardControllerTests: XCTestCase {
         XCTAssertTrue(alarm?.snapshotPath?.hasPrefix(h.directory.path) == true, "photo goes to the data folder")
     }
 
+    func testTheAlarmPhotoIsStoredEncrypted() throws {
+        let h = GuardHarness()
+        h.armAndWatch()
+        h.advance(1.5) { t in GuardHarness.tilted(min(25, t * 30)) }
+        let path = try XCTUnwrap(h.guardian.events.events.last { $0.kind == "alarm" }?.snapshotPath)
+        XCTAssertTrue(path.hasSuffix(".enc"))
+        XCTAssertEqual(try h.guardian.photos.load(path), FakeCamera().snapshotJPEG())
+        XCTAssertEqual(h.outbox.messages.last?.count, 2, "no photo attached unless the owner opted in")
+        XCTAssertNil(try? FileManager.default.contentsOfDirectory(atPath: h.guardian.photos.outgoing.path).first,
+                     "and no plain copy written for it")
+    }
+
+    func testAnOptedInPhotoIsAttachedFromAShortLivedCopy() throws {
+        let h = GuardHarness()
+        h.guardian.notifier.includePhoto = true
+        h.armAndWatch()
+        h.advance(1.5) { t in GuardHarness.tilted(min(25, t * 30)) }
+        let attached = try XCTUnwrap(h.outbox.messages.last?.last)
+        XCTAssertTrue(attached.hasPrefix(h.guardian.photos.outgoing.path))
+        XCTAssertEqual(FileManager.default.contents(atPath: attached), FakeCamera().snapshotJPEG())
+    }
+
     // MARK: Lid, charger, devices
 
     func testClosedLidEscalatesAfterAShortFuse() {

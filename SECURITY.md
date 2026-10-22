@@ -26,6 +26,7 @@ The interesting trust boundaries:
 | `bg-mcp` (MCP server for AI agents) | Whatever agent the user connects | Can arm and read; can't disarm; never returns alarm photo paths; agent text is sanitized and length-capped |
 | iMessage alerts | Messages.app via `osascript` | Recipient, text and photo path are passed as arguments after `--`, never spliced into the script; the recipient must look like a phone number or email |
 | Auto-updates (Sparkle) | `appcast.xml` on the latest GitHub release, over HTTPS | An update installs only if it's signed with our EdDSA key (`SUPublicEDKey`) **and** by the same Developer ID team. Never checks, prompts or relaunches while guarding |
+| Alarm photos | A keychain key pair | Encrypted at rest (HPKE, Curve25519 + ChaCha20-Poly1305). Saving uses only the public key, so nothing prompts mid-alarm; viewing needs the private key. The iMessage copy (opt-in) is short-lived |
 | Disarm code | Keychain (PBKDF2-SHA256, 200k iterations) | 3 free tries, then lockouts that escalate and survive relaunch; guessing sounds the alarm |
 
 Especially interesting: anything that disarms the guard or silences the siren without the code or
@@ -37,7 +38,8 @@ Out of scope:
 - Physical attacks beyond what the README describes (holding the power button will always turn a Mac
   off), and social engineering of the owner.
 - **Code already running as your user.** Anything with your user's access, including an AI agent with
-  shell access, can quit Torie-chan, delete its data folder, change its settings or read its alarm photos.
+  shell access, can quit Torie-chan, delete its data folder or change its settings. (Alarm photos are
+  encrypted, so reading them also needs your keychain's permission.)
   The "agents can't disarm" rule is about the MCP tools and the control socket. If you give an agent a
   shell, it can do whatever you can. Escalating from your user to root, or reaching another user's data,
   is in scope.

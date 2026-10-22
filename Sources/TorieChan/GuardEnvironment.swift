@@ -74,6 +74,7 @@ struct GuardEnvironment {
     var sleep: SleepControl
     var notifier: Notifier
     var passcode: Passcode
+    var photoKeys: PhotoKeyStore
     var defaults: UserDefaults
     /// Event log, alarm photos, session history and the armed marker live here.
     var dataDirectory: URL
@@ -88,7 +89,7 @@ struct GuardEnvironment {
     @MainActor static func live() -> GuardEnvironment {
         GuardEnvironment(
             motion: MotionSensor(), system: SystemMonitor(), camera: PersonTracker(), alarm: Alarm(),
-            sleep: SleepGuard(), notifier: Notifier(), passcode: Passcode(), defaults: .standard,
+            sleep: SleepGuard(), notifier: Notifier(), passcode: Passcode(), photoKeys: KeychainPhotoKeyStore(), defaults: .standard,
             dataDirectory: GuardIDs.supportDirectory, now: Date.init,
             audioFingerprint: { AudioOutput.fingerprint() },
             lidAngle: { LidAngleSensor.shared.angle() },

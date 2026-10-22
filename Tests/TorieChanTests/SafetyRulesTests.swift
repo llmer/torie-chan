@@ -433,3 +433,75 @@ final class BiometricDisarmTests: XCTestCase {
         XCTAssertFalse(passwordPolicies.contains(GuardController.watchPolicy))
     }
 }
+
+// MARK: - Alarm photos
+
+final class PhotoVaultTests: XCTestCase {
+    private let jpeg = Data([0xFF, 0xD8, 0xFF, 0xE0]) + Data("someone at the table".utf8)
+    private let keys = InMemoryPhotoKeyStore()
+    private lazy var directory = temporaryDirectory()
+    private lazy var vault = PhotoVault(directory: directory, keys: keys)
+
+    func testPhotosAreEncryptedAndOnlyTheKeyOpensThem() throws {
+        XCTAssertTrue(vault.prepare())
+        let path = try XCTUnwrap(vault.save(jpeg, named: "alarm_1.jpg"))
+        XCTAssertTrue(path.hasSuffix(".jpg.enc"))
+        let onDisk = try Data(contentsOf: URL(fileURLWithPath: path))
+        XCTAssertNil(onDisk.range(of: Data("someone at the table".utf8)), "nothing readable on disk")
+        XCTAssertFalse(onDisk.starts(with: [0xFF, 0xD8]), "not a JPEG on disk")
+        XCTAssertEqual(try vault.load(path), jpeg)
+    }
+
+    func testSavingDuringAnAlarmNeverTouchesThePrivateKey() {
+        vault.prepare()
+        _ = vault.save(jpeg, named: "alarm_1.jpg")
+        XCTAssertEqual(keys.privateKeyReads, 0, "reading the private key could show a keychain prompt mid-alarm")
+    }
+
+    func testATamperedPhotoDoesntOpen() throws {
+        vault.prepare()
+        let path = try XCTUnwrap(vault.save(jpeg, named: "alarm_1.jpg"))
+        var data = try Data(contentsOf: URL(fileURLWithPath: path))
+        data[data.count - 1] ^= 0xFF
+        try data.write(to: URL(fileURLWithPath: path))
+        XCTAssertThrowsError(try vault.load(path))
+    }
+
+    func testWithoutAKeyThePhotoIsStillKeptAsEvidence() throws {
+        let path = try XCTUnwrap(vault.save(jpeg, named: "alarm_1.jpg"), "no prepare(): no key")
+        XCTAssertTrue(path.hasSuffix(".jpg"))
+        XCTAssertEqual(try vault.load(path), jpeg)
+    }
+
+    func testPhotosFromBeforeEncryptionAreEncryptedAtLaunch() throws {
+        let old = try XCTUnwrap(vault.save(jpeg, named: "alarm_old.jpg")) // plain, as older versions saved them
+        vault.prepare()
+        vault.encryptPlainPhotos()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: old))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: old + ".enc"))
+        XCTAssertEqual(try vault.load(old), jpeg, "the event log's old path still opens")
+    }
+
+    func testDeletingAllDataForgetsTheKey() throws {
+        vault.prepare()
+        let path = try XCTUnwrap(vault.save(jpeg, named: "alarm_1.jpg"))
+        let sealed = try Data(contentsOf: URL(fileURLWithPath: path))
+        vault.deleteEverything()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: path))
+        vault.prepare()
+        XCTAssertThrowsError(try vault.open(sealed), "a stray copy can't be opened with the new key")
+    }
+
+    func testIMessageCopiesAreShortLived() throws {
+        let clock = TestClock()
+        let vault = PhotoVault(directory: directory, keys: keys, now: { clock.date })
+        let copy = try XCTUnwrap(vault.outgoingCopy(of: jpeg, named: "alarm_1.jpg"))
+        try FileManager.default.setAttributes([.creationDate: clock.date], ofItemAtPath: copy.path)
+        clock.advance(PhotoVault.outgoingLifetime - 10)
+        vault.cleanOutgoing()
+        XCTAssertTrue(FileManager.default.fileExists(atPath: copy.path))
+        clock.advance(20)
+        vault.cleanOutgoing()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: copy.path))
+    }
+}

@@ -107,6 +107,8 @@ final class GuardController: ObservableObject {
     let eyes = EyesModel()
     let passcode: Passcode
     let events: EventLog
+    /// Alarm photos, encrypted at rest.
+    let photos: PhotoVault
     let notifier: Notifier
     /// The concrete helper manager, for Settings (install/remove). The guard itself talks to `sleep`.
     let sleepGuard: SleepGuard
@@ -180,6 +182,7 @@ final class GuardController: ObservableObject {
         dataDirectory = env.dataDirectory
         lidFeed = env.feedsLidAngle ? LidAngleFeed() : nil
         events = EventLog(url: env.dataDirectory.appendingPathComponent("events.jsonl"))
+        photos = PhotoVault(directory: env.dataDirectory, keys: env.photoKeys, now: env.now)
         armedMarker = ArmedMarker(directory: env.dataDirectory)
         sensitivity = Sensitivity(rawValue: env.defaults.string(forKey: "sensitivity") ?? "") ?? .medium
         acknowledgedResponsibility = env.defaults.bool(forKey: "acknowledgedResponsibility")
@@ -236,6 +239,7 @@ final class GuardController: ObservableObject {
         }
         stopMotionTest()
         onWillArm?()
+        photos.prepare() // now, so an alarm never has to touch the keychain
 
         // At least 2s so there's a quiet window to calibrate the resting pose.
         let seconds = max(2, countdown)
@@ -659,30 +663,22 @@ final class GuardController: ObservableObject {
         eyes.mood = .alarm
         eyes.boing(2.5)
         alarm.start()
-        let photo = saveSnapshot()
+        let jpeg = tracker.snapshotJPEG()
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd_HH-mm-ss"
+        let name = "alarm_\(formatter.string(from: clock())).jpg"
+        let photo = jpeg.flatMap { photos.save($0, named: name) }
         events.add("alarm", reason, snapshotPath: photo)
         session?.alarms.append(reason)
         if photo != nil { session?.photoTaken = true }
-        notifier.send("ALARM", "\(reason). The siren is going." + (photo != nil && !notifier.includePhoto ? " A photo was saved on your Mac." : ""),
-                      priority: .urgent, attachment: photo.map { URL(fileURLWithPath: $0) })
-        onPhaseChange?(phase)
-    }
-
-    private func saveSnapshot() -> String? {
-        guard let jpeg = tracker.snapshotJPEG() else { return nil }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd_HH-mm-ss"
-        let snapshots = dataDirectory.appendingPathComponent("Snapshots", isDirectory: true)
-        let url = snapshots.appendingPathComponent("alarm_\(formatter.string(from: clock())).jpg")
-        do {
-            try FileManager.default.createDirectory(at: snapshots, withIntermediateDirectories: true,
-                                                    attributes: [.posixPermissions: 0o700])
-            try jpeg.write(to: url, options: .atomic)
-            chmod(url.path, 0o600)
-            return url.path
-        } catch {
-            return nil
+        // Messages needs a plain file: written from memory only if the owner opted in, and short-lived.
+        let attachment = notifier.includePhoto ? jpeg.flatMap { photos.outgoingCopy(of: $0, named: name) } : nil
+        if attachment != nil {
+            DispatchQueue.main.asyncAfter(deadline: .now() + PhotoVault.outgoingLifetime + 5) { [photos] in photos.cleanOutgoing() }
         }
+        notifier.send("ALARM", "\(reason). The siren is going." + (photo != nil && !notifier.includePhoto ? " A photo was saved on your Mac." : ""),
+                      priority: .urgent, attachment: attachment)
+        onPhaseChange?(phase)
     }
 
     // MARK: - People
@@ -950,7 +946,7 @@ final class GuardController: ObservableObject {
     func deleteAllData() {
         guard phase == .disarmed else { return }
         events.clear()
-        try? FileManager.default.removeItem(at: dataDirectory.appendingPathComponent("Snapshots", isDirectory: true))
+        photos.deleteEverything()
         try? FileManager.default.removeItem(at: Self.lastSessionURL(in: dataDirectory))
         lastSession = nil
         objectWillChange.send()
