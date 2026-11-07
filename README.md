@@ -180,9 +180,9 @@ publishes a release with the disk image and its SHA-256:
 git tag v0.1.0 && git push origin v0.1.0
 ```
 
-For builds that open cleanly on any Mac (and support lid-close protection), add these as secrets of the
-**`release` environment** (Settings > Environments > release). Only `v*` tags can deploy to that environment,
-so branch and pull request builds can never read them:
+Releases open cleanly on any Mac and support lid-close protection because they're signed and notarized. Add
+these as secrets of the **`release` environment** (Settings > Environments > release). Only `v*` tags can deploy
+to that environment, so branch and pull request builds can never read them:
 
 | Secret | What it is |
 |---|---|
@@ -191,8 +191,9 @@ so branch and pull request builds can never read them:
 | `NOTARY_KEY_P8` | base64 of an App Store Connect API key (.p8) with Developer access |
 | `NOTARY_KEY_ID` | that key's ID |
 | `NOTARY_ISSUER` | the Issuer ID from App Store Connect > Users and Access > Integrations |
+| `SPARKLE_ED_PRIVATE_KEY` | the Sparkle EdDSA key that signs updates (`generate_keys -x`); its public half is `SUPublicEDKey` in `Info.plist`. Losing it means existing installs can't update |
 
-Without them the workflow still publishes an ad-hoc signed build, clearly labeled as unsigned.
+A tag release needs all of them: without them the workflow fails rather than publishing an unsigned build.
 
 Locally: `SIGN_IDENTITY="Developer ID Application: …" NOTARY_PROFILE=<profile> make dmg`.
 
