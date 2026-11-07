@@ -1,0 +1,32 @@
+{
+  "name": "torie-chan-film",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "studio": "remotion studio src/index.tsx",
+    "capture": "node scripts/capture-app.mjs",
+    "generate": "node scripts/generate-media.mjs",
+    "assemble": "node scripts/prepare-film.mjs",
+    "check": "tsc --noEmit",
+    "render": "node scripts/render.mjs",
+    "verify": "node scripts/verify-film.mjs",
+    "storyboard": "node scripts/storyboard.mjs",
+    "hyperframes": "hyperframes preview hyperframes"
+  },
+  "dependencies": {
+    "@fal-ai/client": "1.10.1",
+    "@remotion/cli": "4.0.537",
+    "@remotion/renderer": "4.0.537",
+    "@remotion/bundler": "4.0.537",
+    "remotion": "4.0.537",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "hyperframes": "0.8.185"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.0.0",
+    "typescript": "^5.9.0"
+  }
+}

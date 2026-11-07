@@ -1,0 +1,96 @@
+{
+  "fps": 24,
+  "width": 1920,
+  "height": 1080,
+  "durationInFrames": 1998,
+  "scenes": [
+    {
+      "id": "cafe",
+      "chapter": "01 / THE COFFEE BREAK",
+      "title": "Back in five.",
+      "narration": "A coffee shop. A little work. Then you need to step away. <#0.5#> Who's watching your laptop?",
+      "minimumDuration": 9,
+      "from": 0,
+      "durationInFrames": 216,
+      "voiceDuration": 5.81737,
+      "voiceFrom": 14
+    },
+    {
+      "id": "arm",
+      "chapter": "02 / JUST ASK",
+      "title": "One request. Eyes on.",
+      "narration": "Meet Torie-chan. <#0.3#> Hey Claude, can you watch my computer? <#0.25#> I've got to take a number two. <#0.4#> The countdown begins. Her eyes open. She's on guard.",
+      "minimumDuration": 12,
+      "from": 204,
+      "durationInFrames": 294,
+      "voiceDuration": 10.631837,
+      "voiceFrom": 14
+    },
+    {
+      "id": "watch",
+      "chapter": "03 / WHILE YOU'RE AWAY",
+      "title": "Cute. Until it counts.",
+      "narration": "People pass. She follows them with her eyes. Someone lingers, and her expression changes. <#0.3#> This laptop has company.",
+      "minimumDuration": 11,
+      "from": 486,
+      "durationInFrames": 264,
+      "voiceDuration": 8.568163,
+      "voiceFrom": 14
+    },
+    {
+      "id": "tamper",
+      "chapter": "04 / SOMEONE TRIES IT",
+      "title": "Hands off.",
+      "narration": "Then a hand nudges the laptop. A spoken warning. <#0.5#> Lift it, and the alarm sounds through the Mac's built-in speakers.",
+      "minimumDuration": 12,
+      "from": 738,
+      "durationInFrames": 288,
+      "voiceDuration": 8.124082,
+      "voiceFrom": 14
+    },
+    {
+      "id": "alert",
+      "chapter": "05 / YOU HEAR ABOUT IT",
+      "title": "An alarm. An alert.",
+      "narration": "With phone alerts enabled, an iMessage reaches your iPhone. <#0.3#> An encrypted alarm photo stays on your Mac.",
+      "minimumDuration": 10,
+      "from": 1014,
+      "durationInFrames": 240,
+      "voiceDuration": 7.209796,
+      "voiceFrom": 14
+    },
+    {
+      "id": "privacy",
+      "chapter": "06 / PRIVATE BY DESIGN",
+      "title": "A guard. With boundaries.",
+      "narration": "People detection happens on your Mac. No face recognition. No continuous recording. <#0.3#> Your agent can arm her. Only you can disarm her.",
+      "minimumDuration": 12,
+      "from": 1242,
+      "durationInFrames": 288,
+      "voiceDuration": 9.325714,
+      "voiceFrom": 14
+    },
+    {
+      "id": "return",
+      "chapter": "07 / WELCOME BACK",
+      "title": "Your laptop. Your way back in.",
+      "narration": "Come back. Use Touch ID or your code. She welcomes you, with a summary of what happened while you were away.",
+      "minimumDuration": 11,
+      "from": 1518,
+      "durationInFrames": 264,
+      "voiceDuration": 6.664127,
+      "voiceFrom": 14
+    },
+    {
+      "id": "hero",
+      "chapter": "TORIE-CHAN / FOR MACOS",
+      "title": "Small face. Big don't-touch energy.",
+      "narration": "Torie-chan. <#0.5#> A little personality. A louder warning. <#0.4#> Back in five? She's got eyes on it.",
+      "minimumDuration": 9,
+      "from": 1770,
+      "durationInFrames": 228,
+      "voiceDuration": 7.88898,
+      "voiceFrom": 14
+    }
+  ]
+}

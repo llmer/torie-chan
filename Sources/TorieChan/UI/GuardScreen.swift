@@ -83,13 +83,19 @@ struct GuardScreen: View {
 struct GuardScreenContent: View {
     let state: GuardDisplayState
     @ObservedObject var eyes: EyesModel
+    /// A fixed native pose for deterministic offscreen captures.
+    var renderedEyes: EyesModel.Frame? = nil
 
     var body: some View {
         ZStack {
             background
                 .ignoresSafeArea()
                 .animation(.easeInOut(duration: 0.33), value: eyes.angryFlash) // a soft red pulse, not a hard strobe
-            EyesView(eyes: eyes)
+            if let renderedEyes {
+                StaticEyesView(frame: renderedEyes)
+            } else {
+                EyesView(eyes: eyes)
+            }
 
             VStack(spacing: 0) {
                 header
