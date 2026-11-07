@@ -11,7 +11,7 @@ let package = Package(
     ],
     dependencies: [
         // Auto-updates. Pinned exactly; the release workflow downloads the matching tools.
-        .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.10.0"),
+        .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.10.1"),
     ],
     targets: [
         .target(name: "GuardShared"),
