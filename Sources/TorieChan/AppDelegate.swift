@@ -19,6 +19,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private var viewMenu: NSMenu?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        #if DEBUG
+        // Offline film capture must return before creating any live hardware or guard services.
+        if let dir = Self.argument(after: "--capture-film") {
+            do {
+                try MovieCapture.render(to: URL(fileURLWithPath: dir))
+            } catch {
+                FileHandle.standardError.write(Data("Film capture failed: \(error)\n".utf8))
+                exit(1)
+            }
+            NSApp.terminate(nil)
+            return
+        }
+        #endif
         try? FileManager.default.createDirectory(at: GuardIDs.supportDirectory, withIntermediateDirectories: true,
                                                  attributes: [.posixPermissions: 0o700])
         guardian = GuardController()
@@ -84,7 +97,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guardian.phase.isGuarding ? .terminateCancel : .terminateNow
+        guardian?.phase.isGuarding == true ? .terminateCancel : .terminateNow
     }
 
     func applicationWillTerminate(_ notification: Notification) {

@@ -59,3 +59,11 @@ Icon?
 *.log
 *.tmp
 tmp/
+
+# Video production dependencies, renders and generated media
+video/node_modules/
+video/out/
+video/.cache/
+video/public/generated/
+video/public/app/
+video/hyperframes/media/

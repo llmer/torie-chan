@@ -211,6 +211,9 @@ SIGN_IDENTITY="Developer ID Application: …" NOTARY_PROFILE=bg make app   # sig
 
 Camera and keychain access need the signed `.app`; `swift run` won't have permission.
 
+The cinematic product film has its own [Remotion project and HyperFrames handoff](video/README.md),
+with native SwiftUI footage, FLUX 3 Max café scenes and MiniMax narration.
+
 ## Not done yet
 
 - **Swift 6 language mode:** the code runs in Swift 5 mode, so data-race checking is off.

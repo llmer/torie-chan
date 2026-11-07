@@ -1,0 +1,84 @@
+{
+  "title": "Torie-chan — Back in five",
+  "fps": 24,
+  "width": 1920,
+  "height": 1080,
+  "voice": "English_Trustworthy_Man",
+  "speechModel": "fal-ai/minimax/speech-2.8-hd",
+  "videoModel": "blackforestlabs/flux-3-max/text-to-video",
+  "scenes": [
+    {
+      "id": "cafe",
+      "chapter": "01 / THE COFFEE BREAK",
+      "title": "Back in five.",
+      "narration": "A coffee shop. A little work. Then you need to step away. <#0.5#> Who's watching your laptop?",
+      "minimumDuration": 9
+    },
+    {
+      "id": "arm",
+      "chapter": "02 / JUST ASK",
+      "title": "One request. Eyes on.",
+      "narration": "Meet Torie-chan. <#0.3#> Hey Claude, can you watch my computer? <#0.25#> I've got to take a number two. <#0.4#> The countdown begins. Her eyes open. She's on guard.",
+      "minimumDuration": 12
+    },
+    {
+      "id": "watch",
+      "chapter": "03 / WHILE YOU'RE AWAY",
+      "title": "Cute. Until it counts.",
+      "narration": "People pass. She follows them with her eyes. Someone lingers, and her expression changes. <#0.3#> This laptop has company.",
+      "minimumDuration": 11
+    },
+    {
+      "id": "tamper",
+      "chapter": "04 / SOMEONE TRIES IT",
+      "title": "Hands off.",
+      "narration": "Then a hand nudges the laptop. A spoken warning. <#0.5#> Lift it, and the alarm sounds through the Mac's built-in speakers.",
+      "minimumDuration": 12
+    },
+    {
+      "id": "alert",
+      "chapter": "05 / YOU HEAR ABOUT IT",
+      "title": "An alarm. An alert.",
+      "narration": "With phone alerts enabled, an iMessage reaches your iPhone. <#0.3#> An encrypted alarm photo stays on your Mac.",
+      "minimumDuration": 10
+    },
+    {
+      "id": "privacy",
+      "chapter": "06 / PRIVATE BY DESIGN",
+      "title": "A guard. With boundaries.",
+      "narration": "People detection happens on your Mac. No face recognition. No continuous recording. <#0.3#> Your agent can arm her. Only you can disarm her.",
+      "minimumDuration": 12
+    },
+    {
+      "id": "return",
+      "chapter": "07 / WELCOME BACK",
+      "title": "Your laptop. Your way back in.",
+      "narration": "Come back. Use Touch ID or your code. She welcomes you, with a summary of what happened while you were away.",
+      "minimumDuration": 11
+    },
+    {
+      "id": "hero",
+      "chapter": "TORIE-CHAN / FOR MACOS",
+      "title": "Small face. Big don't-touch energy.",
+      "narration": "Torie-chan. <#0.5#> A little personality. A louder warning. <#0.4#> Back in five? She's got eyes on it.",
+      "minimumDuration": 9
+    }
+  ],
+  "footage": [
+    {
+      "id": "cafe",
+      "duration": 10,
+      "prompt": "A premium cinematic technology commercial. One continuous 10-second live-action shot in a quiet independent San Francisco coffee shop at late afternoon. Warm side light, honey oak table, cream plaster walls, soft bokeh from distant patrons. On the table is one open thin silver laptop, screen facing away from camera, and a small ceramic espresso cup. A fictional adult software developer wearing a charcoal overshirt finishes typing, gently rises, then walks toward the distant coffee counter, leaving the laptop in the foreground. Camera is behind and slightly beside the laptop, slow smooth slider push. Keep screen content out of view. Natural human motion, subtle 35mm film texture, rich shadows, warm amber highlights, restrained violet accents. Modern premium feature film color, shallow depth of field, anamorphic lens character. No text, no subtitles, no logos, no watermarks. No dialogue, no music."
+    },
+    {
+      "id": "reach",
+      "duration": 6,
+      "prompt": "Premium cinematic suspense insert, one continuous six-second shot. Quiet independent coffee shop, late afternoon warm window light, honey oak table with a thin open silver laptop and ceramic espresso cup. Tight close-up on the left metal edge of the laptop, keyboard in soft focus, display completely outside the top of frame. An anonymous fictional adult hand enters slowly from frame right, rests two fingers against the base, nudges the laptop a few centimeters, then starts to lift its front edge just slightly. The action is restrained and plausible. Slow subtle camera creep. Honey amber light, deep charcoal shadows, shallow depth of field, fine 35mm grain, 65mm lens. No faces, no screen content, no text, no logos, no captions, no watermarks. No dialogue, no music."
+    },
+    {
+      "id": "return",
+      "duration": 6,
+      "prompt": "A premium cinematic technology commercial, one continuous six-second live-action shot. A cozy independent San Francisco coffee shop at golden hour, honey oak table, cream plaster walls. One thin open silver laptop remains on the table, screen facing away from the camera. A fictional adult software developer in a charcoal overshirt returns from the softly blurred coffee counter carrying a small ceramic espresso cup, places the cup next to the laptop and sits down. Relaxed and natural. Slow smooth slider pullback, warm sunlight catches aluminum and cup steam, shallow focus, elegant 35mm film texture, rich amber highlights and restrained violet shadows. Keep screen out of view. No text, no captions, no logos, no watermarks, no dialogue, no music."
+    }
+  ]
+}
