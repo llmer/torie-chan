@@ -1,8 +1,8 @@
 # Homebrew cask for Torie-chan. Published in the llmer/homebrew-tap repository; scripts/update-cask.sh
 # rewrites version and sha256 for each release.
 cask "torie-chan" do
-  version "0.1.3"
-  sha256 "6fc42a48e19bc3f80fddc2cfe30429aee61af816165de37d13e9c97e206bfd82"
+  version "0.2.0"
+  sha256 "ef9c6d533230598fd79e14dade07726517be03e29286d04beb665788bd2e3336"
 
   url "https://github.com/llmer/torie-chan/releases/download/v#{version}/Torie-chan-#{version}.dmg"
   name "Torie-chan"
