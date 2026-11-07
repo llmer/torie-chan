@@ -212,7 +212,6 @@ Camera and keychain access need the signed `.app`; `swift run` won't have permis
 
 ## Not done yet
 
-- **Auto-update (Sparkle):** needs a place to host the appcast and update archives.
 - **Swift 6 language mode:** the code runs in Swift 5 mode, so data-race checking is off.
 - **Data-protection keychain:** needs a provisioning profile.
 - **Full sensor fusion:** a Mahony filter, double-integrated lift height and band-split filtering. The agitation
